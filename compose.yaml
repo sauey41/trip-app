@@ -1,0 +1,12 @@
+services:
+  trip:
+    image: ghcr.io/sauey41/trip-app:latest
+    build: .
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

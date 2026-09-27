@@ -1,0 +1,10 @@
+import {test,after,before} from 'node:test';
+import assert from 'node:assert/strict';
+import {server} from '../server.mjs';
+import {days} from '../public/data.js';
+let base;
+before(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));base='http://127.0.0.1:'+server.address().port;});
+after(()=>new Promise(r=>server.close(r)));
+test('all six days contain valid navigation destinations',()=>{assert.equal(days.length,6);for(const d of days){assert.ok(d.stops.length>=2);for(const s of d.stops){assert.ok(s.query);assert.match(s.time,/^\d{2}:\d{2}$/);}}});
+test('page and bundled assets are served with correct content types',async()=>{for(const [path,type] of [['/','text/html'],['/app.js','text/javascript'],['/data.js','text/javascript'],['/style.css','text/css'],['/assets/paris.jpg','image/jpeg']]){const r=await fetch(base+path);assert.equal(r.status,200);assert.ok(r.headers.get('content-type').startsWith(type));assert.ok((await r.arrayBuffer()).byteLength>0);}});
+test('health endpoint and missing paths',async()=>{assert.equal(await(await fetch(base+'/healthz')).text(),'ok');assert.equal((await fetch(base+'/package.json')).status,404);assert.equal((await fetch(base+'/',{method:'POST'})).status,405);});
