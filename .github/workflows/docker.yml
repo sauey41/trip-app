@@ -20,6 +20,15 @@ jobs:
         with:
           node-version: '22'
       - run: node --test
+      - name: Build container for runtime smoke test
+        run: docker build -t trip-app-test .
+      - name: Verify writable data volume with read-only container
+        run: |
+          docker run -d --name trip-smoke --read-only --cap-drop ALL --security-opt no-new-privileges --env ADMIN_PASSWORD=ci-only-test-password --env COOKIE_SECURE=false -p 8080:8080 -v trip-smoke-data:/app/data trip-app-test
+          node scripts/container-smoke.mjs
+      - name: Clean up test container
+        if: always()
+        run: docker rm -f trip-smoke || true
   docker:
     needs: test
     runs-on: ubuntu-latest

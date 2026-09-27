@@ -4,3 +4,7 @@ test
 node_modules
 README.md
 *.zip
+data
+.env
+.env.*
+backups
