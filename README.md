@@ -1,61 +1,51 @@
-# 贝克旅行 · 私人旅行手册与编辑后台
+# 贝克旅行 · 旅行手册与编辑后台
 
-响应式旅行网站，保留深绿、米白与橙色的原参考风格。前台与后台读取同一份持久数据，后台保存后刷新前台即可查看更新。
+前台 `/`，后台 `/admin`。管理每日行程、交通备选路线、酒店与航班、票券附件、出行清单及攻略笔记。支持新增、编辑、排序、复制、删除和 JSON 导入导出；保存后刷新前台可见。
 
-## 功能
-
-- `/`：每日行程时间线、交通路线与 Plan B、地图导航、预订、票券、出行清单与攻略笔记。
-- `/admin`：旅行封面与日期编辑；每日安排、预订、票券、清单、笔记的新增、修改、复制、排序及删除。
-- 酒店确认单、车票等 PDF / PNG / JPG 附件上传下载（每个最大 12 MB）。
-- JSON 导入导出、保存前确认、未保存离开提醒、多设备修改冲突保护。
-- 密码登录，前台数据和附件也需要登录。会话有效期 12 小时，重启或退出后失效。
-
-支持一份旅行手册、一个共享管理密码；没有多账户权限分级。第一次 PDF 已由人工整理，后台的导入功能支持系统 JSON 备份，**不是任意 PDF 自动识别服务**。
-
-## 快速部署
-
-GitHub Actions 在推送 main 后测试并发布 `linux/amd64`、`linux/arm64`：
-
-```sh
-ghcr.io/sauey41/trip-app:latest
-```
-
-复制 `.env.example` 为 `.env`，设置自己选择的、至少 12 位的 `ADMIN_PASSWORD`。不要把密码提交到 Git。
-
-```dotenv
-ADMIN_PASSWORD=请替换为你自己的长密码
-COOKIE_SECURE=false
-```
+## Docker 部署
 
 ```sh
 docker compose pull
 docker compose up -d
 ```
 
-打开 `http://服务器IP:8080/admin`，使用上述密码登录。默认新部署为空旅行，可在后台新增内容或导入私有 JSON 备份。
+打开 `http://服务器IP:8080/admin`。**第一次打开时，在页面输入两次密码完成初始化**，不需要密码环境变量。密码至少 12 个字符，以加盐 scrypt 哈希保存在数据卷 `auth.json`，重启与更新不会重置。初始化只允许成功一次，之后均为登录。
 
-也可以独立运行：
+也可独立运行：
 
 ```sh
 docker run -d --name trip-app --restart unless-stopped \
-  --env-file .env \
   -p 8080:8080 \
   -v trip-data:/app/data \
+  -v trip-runtime:/app/runtime \
   ghcr.io/sauey41/trip-app:latest
 ```
 
-`ADMIN_PASSWORD` 没有默认值，未配置或少于 12 位时不会开放数据接口。HTTPS 反向代理后设置 `COOKIE_SECURE=true`；本地纯 HTTP 保持 false。反向代理需保留请求 Host，允许至少 12 MB 请求体。远程部署建议用 HTTPS 保护登录密码与私人行程。
+镜像支持 `linux/amd64` 和 `linux/arm64`。GitHub Actions 测试通过后构建发布。若 GHCR 包私有，请先登录 GHCR 或由所有者把包设为公开。
 
-若 GHCR 包为私有，先使用有 `read:packages` 权限的凭据登录 `ghcr.io`，或由仓库所有者将镜像包设为公开。镜像内不包含私人行程与附件。
+前台数据、导出及附件也需要登录。第一次初始化前请先由自己打开管理页设置密码。HTTPS 反向代理后设置 `COOKIE_SECURE=true`；本地 HTTP 保持默认 false。反向代理应保留 Host，允许至少 12 MB 请求体。远程公网部署请配合 HTTPS。
 
-## 迁移大阪 / 神户私有行程
+## 后台源码更新
 
-私人行程、确认号及酒店凭证只保存在独立交付的数据包中，**没有提交到本仓库，也没有打入公开镜像**。
+后台 → **系统更新** → 检查更新 → 更新到此版本。
 
-两种迁移方式：
+- 更新来源固定为 `https://github.com/sauey41/trip-app.git` 的 main 分支，不接受任意仓库或命令。
+- 获取精确提交版本，下载至运行卷的独立目录，执行语法检查及完整测试后才切换。
+- 新进程启动失败自动回退。也可手动「回退上一版本」。切换期间短暂不可用，切换后重新登录。
+- `/app/data` 中的行程、密码和附件保留；代码在 `/app/runtime` 中，不改写镜像层、不挂载 Docker socket。
+- 镜像升级时会优先采用新镜像内置代码。旧源码仍留在运行卷中。
+- Node.js、系统依赖、启动器协议或第三方包变化需要更新 Docker 镜像；当前更新协议只接受 `runtimeApiVersion: 1`、无第三方依赖的版本。
+- 需要容器能通过 HTTPS 访问 GitHub。下载或测试失败保留当前代码。
 
-1. **只导入行程**：登录后台 → 备份与迁移 → 导入交付的 JSON → 检查 → 保存。JSON 里只有附件关联信息，不含附件本身；可以在预订页面重新上传附件。
-2. **完整迁移**：把私有数据 ZIP 解压到 `trip-data` 文件夹，确保其中直接包含 `trip.json` 和 `attachments/`。在服务器首次部署后、开始编辑前执行：
+源码更新只负责应用代码，不自动迁移数据格式。未来涉及破坏性数据迁移时应先完整备份并使用相应镜像版本。运行卷保留历史版本与失败的下载，长期使用可在停机备份后清理不用的目录。
+
+## 私有数据与迁移
+
+私人行程和订单凭证**不在公开仓库或镜像中**。新部署默认为空旅行。
+
+只导入行程：后台 → 备份与迁移 → 导入 JSON → 检查 → 保存。JSON 不包含附件文件。
+
+完整导入私有 ZIP：解压到 `trip-data`，里面应有 `trip.json` 和 `attachments/`。首次部署且尚未编辑前执行：
 
 ```sh
 docker compose cp ./trip-data/. trip:/app/data
@@ -63,39 +53,38 @@ docker compose exec --user root trip chown -R node:node /app/data
 docker compose restart trip
 ```
 
-这会替换现有数据，请仅用于首次初始化，或先备份现有数据。随后使用服务器 `.env` 中的密码登录。私有数据包和密码文件应妥善保存，不要加入 Git。
+已有数据时请先备份，避免覆盖。数据包不含初始密码，仍由你在管理页设置。
 
-## 数据持久化与备份
+数据目录内容：
 
-- `/app/data/trip.json`：完整行程及保存版本号。
-- `/app/data/trip.previous.json`：上一个保存版本。
-- `/app/data/attachments/`：私有附件。
+- `trip.json`：当前行程与版本号。
+- `trip.previous.json`：前一次保存。
+- `auth.json`：管理密码哈希。
+- `attachments/`：PDF / PNG / JPG 凭证，每个上传最大 12 MB。
 
-保存采用串行写入、临时文件原子替换；旧版本提交返回冲突，不会静默覆盖另一设备的修改。数据文件不可写、磁盘满或数据损坏会显示错误。需要一个 Node 进程对应一个数据卷，不支持多个容器同时写同一数据目录。
+后台备份 JSON 不含密码和附件；完整备份请保存整个 `/app/data`。更新镜像或源码均需保留数据卷。不要使用 `docker compose down -v`，它会删除数据卷。
 
-升级用 `docker compose pull && docker compose up -d`。不要执行带 `-v` 的 down 命令，否则会删除数据卷。仅导出 JSON 不包含附件；完整备份请在停止编辑时备份整个数据卷。
+文件保存采用串行写入、原子替换与版本冲突检查。一个数据卷仅由一个应用进程写入，不支持多个副本共享写入。会话有效期 12 小时，退出或服务重启后失效。移除附件关联不会自动删除物理文件，方便恢复。
 
-附件解除关联不会自动删除物理文件，方便恢复；旧附件可在做好备份后由管理员清理。HTML 及 SVG 不作为票券附件接受，PDF / 图片下载需要有效登录。
+忘记密码时，由服务器管理员停止应用并备份 `/app/data/auth.json`，再移走该文件，重新启动后在管理页设置新密码。不要在应用运行时直接编辑密码文件。
 
-## 本地开发
+## 本地运行与测试
 
-Node.js 22+，无第三方运行依赖：
+Node.js 22+，源码更新还需要 Git。无第三方 Node 依赖。
 
 ```sh
-node --env-file=.env server.mjs
+node launcher.mjs
 node --test
 ```
 
-默认端口 `8080`，可通过 `PORT` 更改；数据目录默认 `./data`，可通过 `DATA_DIR` 更改。健康检查 `/healthz`。
+默认端口 `8080`。`PORT`、`DATA_DIR`、`RUNTIME_DIR` 可选；未设置时使用本地 `data/` 和 `runtime/`。健康检查为 `/healthz`。仅运行 `node server.mjs` 也能使用编辑功能，但源码更新入口不可用。
 
-测试覆盖登录、限流、CSRF、非公开文件隔离、并发保存、重启持久化、备份、非法导入、附件鉴权和 HTML 转义。前台和后台模板均对用户输入转义，参考链接只接受 HTTP/HTTPS。
+测试覆盖首次密码初始化、重复初始化竞争、密码哈希持久化、登录限流、CSRF、附件鉴权、版本冲突、重启持久化、非法导入、HTML 转义、新版本切换和自动回退。CI 还检查只读容器挂载数据卷后的实际登录与保存。
 
-## 文件结构
+这是一个共享密码、单份旅行的系统。首次 PDF 由人工整理，后续导入支持本系统 JSON，不是任意 PDF 自动识别服务。
 
-- `lib/model.mjs`：行程数据结构与校验。
-- `lib/store.mjs`：持久数据与版本冲突保护。
-- `server.mjs`：API、会话、附件与静态资源。
-- `public/admin.js`、`admin.css`：后台编辑页面。
-- `public/app.js`、`style.css`：旅行前台。
+## 源码结构
 
-封面图片来自 [Unsplash 大阪城照片](https://unsplash.com/photos/a-tall-white-and-black-building-next-to-a-tree-LTwKfLjYmPQ)，已随镜像打包。地图链接打开 Google Maps，无需 API Key。
+`lib/model.mjs` 为数据校验，`lib/store.mjs` 为持久化，`lib/auth.mjs` 为密码，`lib/updater.mjs` 为更新下载；`launcher.mjs` 负责进程切换与回退；`server.mjs` 提供 API；`public/` 为前后台页面。
+
+封面来自 [Unsplash 大阪城照片](https://unsplash.com/photos/a-tall-white-and-black-building-next-to-a-tree-LTwKfLjYmPQ)，已随镜像打包。地图链接打开 Google Maps，无需 API Key。

@@ -2,14 +2,17 @@ import http from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve,join} from 'node:path';
-import {randomBytes,randomUUID,scryptSync,timingSafeEqual} from 'node:crypto';
+import {randomBytes,randomUUID} from 'node:crypto';
+import {createAuth} from './lib/auth.mjs';
+import {createUpdater} from './lib/updater.mjs';
 import {createStore} from './lib/store.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
 const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/admin.js':'admin.js','/shared.js':'shared.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
-export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),password=process.env.ADMIN_PASSWORD||'',secureCookie=process.env.COOKIE_SECURE==='true'}={}){
+export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true'}={}){
  const store=createStore(dataDir),sessions=new Map(),attempts=new Map();
- const salt=randomBytes(16),passwordHash=password.length>=12?scryptSync(password,salt,32):null;
+ const credentials=createAuth(dataDir);
+ const updater=createUpdater();
  const cookie=(token,age)=>`trip_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secureCookie?'; Secure':''}`;
  function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('trip_session='))?.slice(13);const s=sessions.get(token);if(s&&s.expires>Date.now())return {...s,token};if(token)sessions.delete(token);return null;}
  async function body(req,max=2*1024*1024){if(Number(req.headers['content-length'])>max)throw Object.assign(new Error('文件或内容超过大小限制'),{status:413});let size=0,parts=[];for await(const part of req){size+=part.length;if(size>max)throw Object.assign(new Error('文件或内容超过大小限制'),{status:413});parts.push(part);}return Buffer.concat(parts);}
@@ -20,21 +23,26 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),passwor
    const path=new URL(req.url,'http://localhost').pathname;
    if(path==='/healthz'&&req.method==='GET'){res.writeHead(200,{'Content-Type':'text/plain'});return res.end('ok');}
    const auth=session(req);
-   if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:!!auth,configured:!!passwordHash,csrf:auth?.csrf});
+   if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:!!auth,configured:await credentials.configured(),csrf:auth?.csrf});
    if(path.startsWith('/api/')){
-    if(!passwordHash)return json(res,503,{error:'请为服务器设置至少 12 位的 ADMIN_PASSWORD，然后重新启动。'});
     if(!['GET','HEAD'].includes(req.method)){const origin=req.headers.origin;if(req.headers['sec-fetch-site']==='cross-site'||(origin&&new URL(origin).host!==req.headers.host))return json(res,403,{error:'请求来源不匹配'});}
+    if(path==='/api/setup'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());if(data?.password!==data?.confirmPassword)return json(res,400,{error:'两次输入的密码不一致'});await credentials.setup(data?.password);return json(res,201,{ok:true});}
+    if(!await credentials.configured())return json(res,503,{error:'请先进入管理页面设置访问密码。'});
     if(path==='/api/login'&&req.method==='POST'){
      const now=Date.now(),ip=req.socket.remoteAddress;for(const [key,value] of attempts)if(value.until<=now)attempts.delete(key);
      const a=attempts.get(ip)||{count:0,until:now+15*60*1000};if(a.count>=10)return json(res,429,{error:'尝试次数过多，请 15 分钟后重试'});
      const data=JSON.parse((await body(req,4096)).toString());a.count++;attempts.set(ip,a);const supplied=typeof data?.password==='string'?data.password:'';
-     if(supplied.length>512||!timingSafeEqual(scryptSync(supplied,salt,32),passwordHash))return json(res,401,{error:'密码不正确'});
+     if(!await credentials.verify(supplied))return json(res,401,{error:'密码不正确'});
      attempts.delete(ip);for(const [k,v] of sessions)if(v.expires<now)sessions.delete(k);if(sessions.size>=100)sessions.delete(sessions.keys().next().value);
      const token=randomBytes(32).toString('hex'),csrf=randomBytes(24).toString('hex');sessions.set(token,{csrf,expires:now+12*3600*1000});return json(res,200,{ok:true,csrf},{'Set-Cookie':cookie(token,43200)});
     }
     if(!auth)return json(res,401,{error:'请先登录'});
     if(!['GET','HEAD'].includes(req.method)&&req.headers['x-csrf-token']!==auth.csrf)return json(res,403,{error:'登录状态已更新，请刷新页面'});
     if(path==='/api/logout'&&req.method==='POST'){sessions.delete(auth.token);return json(res,200,{ok:true},{'Set-Cookie':cookie('',0)});}
+    if(path==='/api/update'&&req.method==='GET')return json(res,200,await updater.status());
+    if(path==='/api/update/check'&&req.method==='POST')return json(res,200,await updater.check());
+    if(path==='/api/update/apply'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());return json(res,202,await updater.apply(data.sha));}
+    if(path==='/api/update/rollback'&&req.method==='POST')return json(res,202,await updater.rollback());
     if(path==='/api/trip'&&req.method==='GET')return json(res,200,await store.read());
     if(path==='/api/validate'&&req.method==='POST')return json(res,200,{trip:validateTrip(JSON.parse((await body(req)).toString()))});
     if(path==='/api/trip'&&req.method==='PUT'){const data=JSON.parse((await body(req)).toString());return json(res,200,await store.save(data.trip,data.revision));}
@@ -58,4 +66,4 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),passwor
   }catch(e){const code=e.status||(e instanceof ValidationError||e instanceof SyntaxError||e instanceof URIError?400:e.code==='ENOENT'?404:500);json(res,code,{error:code===500?'保存或读取失败，请检查数据卷权限和磁盘空间。':e.message});}
  });
 }
-if(process.argv[1]===fileURLToPath(import.meta.url)){const server=createApp();server.listen(Number(process.env.PORT)||8080,'0.0.0.0',()=>console.log('Trip app ready on port '+(process.env.PORT||8080)));}
+if(process.argv[1]===fileURLToPath(import.meta.url)){const server=createApp();server.listen(Number(process.env.PORT)||8080,'0.0.0.0',()=>{console.log('Trip app ready on port '+(process.env.PORT||8080));process.send?.({type:'ready'});});process.on('SIGTERM',()=>{server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),9000).unref();});}

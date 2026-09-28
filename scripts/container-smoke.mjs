@@ -3,6 +3,8 @@ const base='http://127.0.0.1:8080';
 let healthy=false;
 for(let attempt=0;attempt<30;attempt++){try{if((await fetch(base+'/healthz')).ok){healthy=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
 assert.ok(healthy,'container must become healthy');
+assert.equal((await fetch(base+'/api/trip')).status,503);
+assert.equal((await fetch(base+'/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'ci-only-test-password',confirmPassword:'ci-only-test-password'})})).status,201);
 assert.equal((await fetch(base+'/api/trip')).status,401);
 const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'ci-only-test-password'})});
 assert.equal(login.status,200);
