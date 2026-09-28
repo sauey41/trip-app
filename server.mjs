@@ -10,9 +10,9 @@ import {createAi} from './lib/ai.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
 const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/admin.js':'admin.js','/merge.js':'merge.js','/shared.js':'shared.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
-export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch}={}){
+export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch,sourceReader}={}){
  const store=createStore(dataDir),sessions=new Map(),attempts=new Map();
- const ai=createAi(dataDir,{fetchImpl});
+ const ai=createAi(dataDir,{fetchImpl,sourceReader});
  const credentials=createAuth(dataDir);
  const updater=createUpdater();
  const cookie=(token,age)=>`trip_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secureCookie?'; Secure':''}`;
@@ -58,6 +58,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path==='/api/export'&&req.method==='GET')return json(res,200,(await store.read()).trip,{'Content-Disposition':'attachment; filename="trip-backup.json"'});
     if(path==='/api/ai/settings'&&req.method==='GET')return json(res,200,await ai.settings());
     if(path==='/api/ai/settings'&&req.method==='PUT'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.saveSettings(data));}
+    if(path==='/api/ai/source'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.readSource(data.url));}
     if(path==='/api/ai/organize'&&req.method==='POST'){const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await ai.organize(data.source));}
     if(path==='/api/attachments'&&req.method==='POST'){
      const bytes=await body(req,12*1024*1024);

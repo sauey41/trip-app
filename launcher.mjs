@@ -10,7 +10,7 @@ try{const saved=JSON.parse(await readFile(join(runtime,'state.json'),'utf8'));if
 async function persist(){const temp=join(runtime,'state.tmp');await writeFile(temp,JSON.stringify(state));await rename(temp,join(runtime,'state.json'));}
 async function status(phase,message){await writeFile(join(runtime,'update-status.json'),JSON.stringify({phase,message,at:new Date().toISOString()}));}
 async function boot(ref){if(!valid(ref))throw new Error('Invalid source reference');const cwd=ref==='bundled'?base:join(runtime,'releases',ref);
- const processChild=fork(join(cwd,'server.mjs'),[],{cwd,env:{...process.env,DATA_DIR:resolve(process.env.DATA_DIR||join(base,'data')),RUNTIME_DIR:runtime,SOURCE_UPDATES:'true',TMPDIR:join(runtime,'tmp'),TMP:join(runtime,'tmp'),TEMP:join(runtime,'tmp')},stdio:['ignore','inherit','inherit','ipc']});child=processChild;
+ const processChild=fork(join(cwd,'server.mjs'),[],{cwd,env:{...process.env,DATA_DIR:resolve(process.env.DATA_DIR||join(base,'data')),RUNTIME_DIR:runtime,IMAGE_ROOT:base,SOURCE_UPDATES:'true',TMPDIR:join(runtime,'tmp'),TMP:join(runtime,'tmp'),TEMP:join(runtime,'tmp')},stdio:['ignore','inherit','inherit','ipc']});child=processChild;
  return new Promise((resolveReady,reject)=>{let ready=false;const timer=setTimeout(()=>{processChild.kill();reject(new Error('新版本启动超时'));},20000);
   processChild.on('message',m=>{if(m?.type==='ready'){ready=true;clearTimeout(timer);resolveReady();}else if(m?.type==='activate'&&ready&&!switching&&!stopping)void change(m.ref);});
   processChild.on('error',e=>{clearTimeout(timer);reject(e);});

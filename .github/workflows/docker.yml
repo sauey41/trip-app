@@ -26,6 +26,8 @@ jobs:
         run: |
           docker run -d --name trip-smoke --read-only --cap-drop ALL --security-opt no-new-privileges --env COOKIE_SECURE=false -p 8080:8080 -v trip-smoke-data:/app/data -v trip-smoke-runtime:/app/runtime trip-app-test
           node scripts/container-smoke.mjs
+      - name: Verify browser can read documents in restricted container
+        run: docker exec trip-smoke node scripts/browser-smoke.mjs
       - name: Clean up test container
         if: always()
         run: docker rm -f trip-smoke || true

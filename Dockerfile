@@ -1,11 +1,13 @@
 FROM node:22-alpine
 ARG BUILD_SHA=development
-ENV NODE_ENV=production PORT=8080 DATA_DIR=/app/data RUNTIME_DIR=/app/runtime BUILD_SHA=$BUILD_SHA
-RUN apk add --no-cache git
+ENV NODE_ENV=production PORT=8080 DATA_DIR=/app/data RUNTIME_DIR=/app/runtime BUILD_SHA=$BUILD_SHA CHROMIUM_PATH=/usr/bin/chromium TMPDIR=/app/runtime XDG_CACHE_HOME=/app/runtime/cache XDG_CONFIG_HOME=/app/runtime/config
+RUN apk add --no-cache git chromium
 WORKDIR /app
 COPY --chown=node:node package.json server.mjs launcher.mjs ./
+RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund
 COPY --chown=node:node public ./public
 COPY --chown=node:node lib ./lib
+COPY --chown=node:node scripts/browser-smoke.mjs ./scripts/browser-smoke.mjs
 RUN mkdir -p /app/data /app/runtime && chown node:node /app/data /app/runtime
 USER node
 EXPOSE 8080
