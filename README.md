@@ -43,7 +43,7 @@ docker run -d --name trip-app --restart unless-stopped \
 
 后台「全部旅行」可新建、切换和删除旅行。切换后该旅行成为前台默认展示的内容；前台也可自行选择其他旅行。删除旅行会保留磁盘上的附件文件，完整删除前请先导出 JSON 或备份数据卷。
 
-后台「AI 整理行程」中保存小米 MiMo API Key，再从飞书文档复制正文粘贴，或读取 TXT / Markdown。密钥保存在数据卷 `mimo.json`，不会回传给浏览器，也不会进入 GitHub 仓库或 Docker 镜像。原文发送到 [Xiaomi MiMo Chat Completions API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api)，使用 `mimo-v2.6-pro`。接口遇到 429 会短暂退避重试；同一实例同一时间仅执行一个整理请求。
+后台「AI 整理行程」中填写小米 MiMo API Key 和模型名称，点击「保存密钥和模型」，再从飞书文档复制正文粘贴，或读取 TXT / Markdown。模型默认是 `mimo-v2.6-pro`，也可以选择其他 MiMo 文本模型。密钥保存在数据卷 `mimo.json`，不会回传给浏览器，也不会进入 GitHub 仓库或 Docker 镜像。原文发送到 [Xiaomi MiMo Chat Completions API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api)。接口遇到 429 会短暂退避重试；同一实例同一时间仅执行一个整理请求。若 AI 漏写标题，预览中会显示待核对的占位名称，确认后可在编辑区修改。
 
 固定提示词位于 `lib/ai.mjs` 的 `ORGANIZER_PROMPT`。它要求按日期和时间线提取行程，将航班/酒店/交通归入预订，将门票和预约归入票券，将待办归入清单，将攻略归入笔记；只把明确有确认依据的预订标为已确认。重复、广告和闲聊列为跳过项，缺失或模糊的信息留空并列为待核对项。用户原文只作为资料，不会覆盖提示词规则。AI 返回后先进行结构校验并显示预览，可建立新旅行、按日期与标题去重后合并到当前旅行，或替换当前旅行编辑区。后两种方式仍需人工检查并点击保存。飞书分享页不会由服务器自动抓取；请在浏览器中复制正文。
 

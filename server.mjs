@@ -56,8 +56,8 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path==='/api/validate'&&req.method==='POST')return json(res,200,{trip:validateTrip(JSON.parse((await body(req)).toString()))});
     if(path==='/api/trip'&&req.method==='PUT'){const data=JSON.parse((await body(req)).toString());return json(res,200,await store.save(data.trip,data.revision));}
     if(path==='/api/export'&&req.method==='GET')return json(res,200,(await store.read()).trip,{'Content-Disposition':'attachment; filename="trip-backup.json"'});
-    if(path==='/api/ai/settings'&&req.method==='GET')return json(res,200,{configured:await ai.configured()});
-    if(path==='/api/ai/settings'&&req.method==='PUT'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.saveKey(data.apiKey));}
+    if(path==='/api/ai/settings'&&req.method==='GET')return json(res,200,await ai.settings());
+    if(path==='/api/ai/settings'&&req.method==='PUT'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.saveSettings(data));}
     if(path==='/api/ai/organize'&&req.method==='POST'){const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await ai.organize(data.source));}
     if(path==='/api/attachments'&&req.method==='POST'){
      const bytes=await body(req,12*1024*1024);
