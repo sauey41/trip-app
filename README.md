@@ -1,6 +1,6 @@
 # 贝克旅行 · 旅行手册与编辑后台
 
-前台 `/`，后台 `/admin`。管理每日行程、交通备选路线、酒店与航班、票券附件、出行清单及攻略笔记。支持新增、编辑、排序、复制、删除和 JSON 导入导出；保存后刷新前台可见。
+前台 `/`，后台 `/admin`。支持保存多趟旅行并在前后台切换；每趟旅行独立管理每日行程、交通备选路线、酒店与航班、票券附件、出行清单及攻略笔记。支持新增、编辑、排序、复制、删除和 JSON 导入导出；保存后刷新前台可见。
 
 ## Docker 部署
 
@@ -37,7 +37,15 @@ docker run -d --name trip-app --restart unless-stopped \
 - Node.js、系统依赖、启动器协议或第三方包变化需要更新 Docker 镜像；当前更新协议只接受 `runtimeApiVersion: 1`、无第三方依赖的版本。
 - 需要容器能通过 HTTPS 访问 GitHub。下载或测试失败保留当前代码。
 
-源码更新只负责应用代码，不自动迁移数据格式。未来涉及破坏性数据迁移时应先完整备份并使用相应镜像版本。运行卷保留历史版本与失败的下载，长期使用可在停机备份后清理不用的目录。
+旧版 `trip.json` 在首次写入时自动迁移到 `trips.json`，旧文件保留。未来涉及破坏性数据迁移时应先完整备份并使用相应镜像版本。运行卷保留历史版本与失败的下载，长期使用可在停机备份后清理不用的目录。
+
+## 多行程与 MiMo 整理
+
+后台「全部旅行」可新建、切换和删除旅行。切换后该旅行成为前台默认展示的内容；前台也可自行选择其他旅行。删除旅行会保留磁盘上的附件文件，完整删除前请先导出 JSON 或备份数据卷。
+
+后台「AI 整理行程」中保存小米 MiMo API Key，再从飞书文档复制正文粘贴，或读取 TXT / Markdown。密钥保存在数据卷 `mimo.json`，不会回传给浏览器，也不会进入 GitHub 仓库或 Docker 镜像。原文发送到 [Xiaomi MiMo Chat Completions API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api)，使用 `mimo-v2.6-pro`。接口遇到 429 会短暂退避重试；同一实例同一时间仅执行一个整理请求。
+
+固定提示词位于 `lib/ai.mjs` 的 `ORGANIZER_PROMPT`。它要求按日期和时间线提取行程，将航班/酒店/交通归入预订，将门票和预约归入票券，将待办归入清单，将攻略归入笔记；只把明确有确认依据的预订标为已确认。重复、广告和闲聊列为跳过项，缺失或模糊的信息留空并列为待核对项。用户原文只作为资料，不会覆盖提示词规则。AI 返回后先进行结构校验并显示预览，可建立新旅行、按日期与标题去重后合并到当前旅行，或替换当前旅行编辑区。后两种方式仍需人工检查并点击保存。飞书分享页不会由服务器自动抓取；请在浏览器中复制正文。
 
 ## 私有数据与迁移
 
@@ -57,9 +65,11 @@ docker compose restart trip
 
 数据目录内容：
 
-- `trip.json`：当前行程与版本号。
-- `trip.previous.json`：前一次保存。
+- `trips.json`：全部行程、各自的版本号和默认行程。
+- `trips.previous.json`：前一次数据快照。
+- `trip.json`：旧版单行程数据，迁移后原样保留。
 - `auth.json`：管理密码哈希。
+- `mimo.json`：后台保存的 MiMo API Key。
 - `attachments/`：PDF / PNG / JPG 凭证，每个上传最大 12 MB。
 
 后台备份 JSON 不含密码和附件；完整备份请保存整个 `/app/data`。更新镜像或源码均需保留数据卷。不要使用 `docker compose down -v`，它会删除数据卷。
@@ -81,10 +91,10 @@ node --test
 
 测试覆盖首次密码初始化、重复初始化竞争、密码哈希持久化、登录限流、CSRF、附件鉴权、版本冲突、重启持久化、非法导入、HTML 转义、新版本切换和自动回退。CI 还检查只读容器挂载数据卷后的实际登录与保存。
 
-这是一个共享密码、单份旅行的系统。首次 PDF 由人工整理，后续导入支持本系统 JSON，不是任意 PDF 自动识别服务。
+这是一个共享密码、多趟旅行的系统。首次 PDF 由人工整理；AI 整理支持粘贴文本和 TXT / Markdown，JSON 导入支持本系统备份。暂不自动识别 PDF 或直接抓取飞书链接。
 
 ## 源码结构
 
-`lib/model.mjs` 为数据校验，`lib/store.mjs` 为持久化，`lib/auth.mjs` 为密码，`lib/updater.mjs` 为更新下载；`launcher.mjs` 负责进程切换与回退；`server.mjs` 提供 API；`public/` 为前后台页面。
+`lib/model.mjs` 为数据校验，`lib/store.mjs` 为多行程持久化，`lib/ai.mjs` 为固定提示词和 MiMo 对接，`lib/auth.mjs` 为密码，`lib/updater.mjs` 为更新下载；`launcher.mjs` 负责进程切换与回退；`server.mjs` 提供 API；`public/` 为前后台页面。
 
 封面来自 [Unsplash 大阪城照片](https://unsplash.com/photos/a-tall-white-and-black-building-next-to-a-tree-LTwKfLjYmPQ)，已随镜像打包。地图链接打开 Google Maps，无需 API Key。
