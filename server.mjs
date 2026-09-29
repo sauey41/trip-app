@@ -8,7 +8,7 @@ import {createUpdater} from './lib/updater.mjs';
 import {createStore} from './lib/store.mjs';
 import {createAi} from './lib/ai.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
-const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/admin.js':'admin.js','/merge.js':'merge.js','/shared.js':'shared.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
+const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/admin.js':'admin.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
 export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch,sourceReader}={}){
  const store=createStore(dataDir),sessions=new Map(),attempts=new Map();
@@ -54,6 +54,8 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(tripMatch&&req.method==='DELETE')return json(res,200,await store.remove(tripMatch[1]));
     const preparationMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/stops\/([a-zA-Z0-9_-]+)\/preparations\/([a-zA-Z0-9_-]+)$/.exec(path);
     if(preparationMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setPreparation(preparationMatch[1],preparationMatch[2],preparationMatch[3],data.done));}
+    const bookingUsedMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/bookings\/([a-zA-Z0-9_-]+)\/used$/.exec(path);
+    if(bookingUsedMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setBookingUsed(bookingUsedMatch[1],bookingUsedMatch[2],data.used));}
     if(path==='/api/trip'&&req.method==='GET')return json(res,200,await store.read());
     if(path==='/api/validate'&&req.method==='POST')return json(res,200,{trip:validateTrip(JSON.parse((await body(req)).toString()))});
     if(path==='/api/trip'&&req.method==='PUT'){const data=JSON.parse((await body(req)).toString());return json(res,200,await store.save(data.trip,data.revision));}
@@ -72,6 +74,10 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path.startsWith('/api/attachments/')&&req.method==='GET'){
      const id=path.split('/').pop();if(!/^[a-f0-9-]{36}\.(pdf|png|jpg)$/.test(id))return json(res,404,{error:'附件不存在'});
      const bytes=await readFile(join(dataDir,'attachments',id));res.writeHead(200,{'Content-Type':types[id.split('.').pop()],'Content-Disposition':`attachment; filename="${id}"`});return res.end(bytes);
+    }
+    if(path.startsWith('/api/previews/')&&req.method==='GET'){
+     const id=path.split('/').pop();if(!/^[a-f0-9-]{36}\.(pdf|png|jpg)$/.test(id))return json(res,404,{error:'附件不存在'});
+     const bytes=await readFile(join(dataDir,'attachments',id));res.setHeader('Content-Security-Policy',"frame-ancestors 'self'");res.writeHead(200,{'Content-Type':types[id.split('.').pop()],'Content-Disposition':`inline; filename="${id}"`});return res.end(bytes);
     }
     if(path.startsWith('/api/photos/')&&req.method==='GET'){
      const id=path.split('/').pop();if(!/^[a-f0-9-]{36}\.(png|jpg)$/.test(id))return json(res,404,{error:'图片不存在'});
