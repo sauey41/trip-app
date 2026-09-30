@@ -8,3 +8,6 @@ aside nav,.day-strip{scrollbar-width:thin}.item summary strong{overflow-wrap:any
 .photo-editor details{margin:10px 0;color:var(--green)}
 .photo-editor details summary{cursor:pointer;font-size:12px;font-weight:600}
 .photo-editor details label{margin:8px 0 0}
+.ai-format{margin:10px 0 18px;border:1px solid var(--line);border-radius:8px;padding:12px 15px;background:#f5f7f2}
+.ai-format summary{cursor:pointer;color:#285747;font-weight:600}
+.ai-format pre{overflow:auto;margin:14px 0 8px;padding:15px;border-radius:6px;background:#fffdf8;color:#33463b;font:13px/1.8 Consolas,"Microsoft YaHei",monospace;white-space:pre-wrap;overflow-wrap:anywhere}

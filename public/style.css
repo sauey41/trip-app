@@ -37,3 +37,9 @@ h1 em{margin-right:.16em}
 .used-action-restore{background:#eef2ec;color:var(--green);box-shadow:none}
 .used-action-restore:hover{background:#e1e9df}
 @media(max-width:680px){.stop-summary{flex-wrap:wrap;gap:9px;margin:10px 0 12px}.stop-summary .route-copy{flex-basis:100%}.stop-summary .route-map{margin-left:auto}.photo-grid{gap:10px}.photo-thumb{border-radius:6px}.photo-preview{padding:9px}.photo-preview-head{font-size:13px}}
+.stop-summary{margin-bottom:14px}
+.stop-actions{display:grid;grid-template-columns:repeat(2,minmax(0,160px));gap:10px;align-items:stretch;margin:20px 0 0}
+.stop-actions .stop-action{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;padding:10px 13px;border-radius:6px;background:#fbfcf9;color:var(--green);font-size:13px;font-weight:600;line-height:1.2;white-space:nowrap}
+.stop-actions .stop-action svg:last-child{margin-left:auto}
+@media(max-width:680px){.stop-actions{grid-template-columns:repeat(2,minmax(0,1fr));max-width:340px;gap:7px;margin-top:16px}.stop-actions .stop-action{min-height:42px;padding:9px 10px;font-size:12px}}
+@media(max-width:390px){.stop-actions .stop-action svg:last-child{display:none}}
