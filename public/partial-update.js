@@ -21,6 +21,9 @@ function keepChildState(existing,incoming){
  const extensions=new Map((existing.extensions||[]).map(item=>[key(item.title),item]));
  for(const item of incoming.extensions||[])extensions.set(key(item.title),{...item,id:extensions.get(key(item.title))?.id||item.id});
  incoming.extensions=[...extensions.values()];
+ const shops=new Map((existing.shops||[]).map(item=>[key(item.name),item]));
+ for(const item of incoming.shops||[])shops.set(key(item.name),item);
+ incoming.shops=[...shops.values()];
  return incoming;
 }
 function updateRecord(existing,incoming){
