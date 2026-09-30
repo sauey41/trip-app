@@ -7,7 +7,6 @@ export function mergeTrips(current,incoming){
  result.days.sort((a,b)=>a.date&&b.date?a.date.localeCompare(b.date):a.date?-1:b.date?1:0);
  for(const [field,makeKey] of [['bookings',b=>key(b.date,b.title,b.kind)],['tickets',b=>key(b.date,b.title)]])for(const item of incoming[field]){const found=result[field].find(value=>makeKey(value)===makeKey(item));if(!found){result[field].push(structuredClone(item));continue;}fillMissing(found,item,['endDate','time','reference','location','cost','notes','url','attachment']);}
  appendUnique(result.checklist,incoming.checklist,c=>key(c.group,c.title));
- appendUnique(result.notes,incoming.notes,n=>key(n.title));
  if((result.title==='我的旅行'||/^新旅行 \d+$/.test(result.title))&&incoming.title)result.title=incoming.title;
  if(result.subtitle==='把每一天，安排成喜欢的样子。'&&incoming.subtitle)result.subtitle=incoming.subtitle;
  for(const field of ['startDate','endDate','cityFrom','cityTo','travelers','notice'])if((!result[field]||['My','Trip','2 人'].includes(result[field]))&&incoming[field])result[field]=incoming[field];
