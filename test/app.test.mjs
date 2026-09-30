@@ -7,6 +7,7 @@ import {createApp} from '../server.mjs';
 import {emptyTrip,validateTrip} from '../lib/model.mjs';
 import {esc,safeUrl} from '../public/shared.js';
 import {mergeTrips} from '../public/merge.js';
+import {shouldShowStopMap} from '../public/map-visibility.js';
 import {normalizeAiResult,splitOrganizerSource} from '../lib/ai.mjs';
 import {attachDocumentPhotos} from '../lib/photo-map.mjs';
 import {organizeStopCopy} from '../lib/stop-copy.mjs';
@@ -46,6 +47,18 @@ test('document photos attach to their nearby destination, including photos befor
 test('AI does not display generic provenance copy as a source',()=>{const result=normalizeAiResult({trip:{title:'大阪',days:[{city:'大阪',stops:[{title:'大阪城',source:'原文行程 · 未重新核实时刻与营业安排'}]}]}},new Set());assert.equal(result.trip.days[0].stops[0].source,'');});
 test('route copy is separated from on-site activity without swallowing a timetable',()=>{const stop={description:'路线：从酒店步行至 JR 大阪站。\n到站后购买车票。\n从酒店步行至 JR 大阪站。',transport:'',tips:''};organizeStopCopy(stop);assert.equal(stop.transport,'从酒店步行至 JR 大阪站。');assert.equal(stop.description,'到站后购买车票。');const schedule={description:'Haruka 候选班次：12:14→13:01、12:44→13:31。',transport:'优先乘 Haruka。'};organizeStopCopy(schedule);assert.match(schedule.description,/候选班次/);assert.equal(schedule.transport,'优先乘 Haruka。');});
 test('HTML is escaped and links allow only HTTP(S)',()=>{assert.equal(esc('<img src=x onerror="bad">'),'&lt;img src=x onerror=&quot;bad&quot;&gt;');assert.equal(safeUrl('javascript:alert(1)'), '');assert.equal(safeUrl('https://example.com/'),'https://example.com/');});
+test('map links skip origins, repeated airport and hotel stops, but keep new destinations',()=>{const stops=[
+ {title:'钟翠苑住宅（起床）',location:'钟翠苑住宅'},
+ {title:'上海浦东机场 T2',location:'上海浦东国际机场 T2'},
+ {title:'机场流程',location:'上海浦东国际机场 T2 航站楼'},
+ {title:'关西机场 T2',location:'关西国际机场 T2'},
+ {title:'JR关西机场站',location:'大阪关西国际机场 T1'},
+ {title:'酒店周边散步',location:'Hotel Vischio Osaka'},
+ {title:'Hotel Vischio Osaka 酒店',location:'Hotel Vischio Osaka 酒店'},
+ {title:'酒店（取行李）',location:'Hotel Vischio Osaka'},
+ {title:'心斋桥',location:'心斋桥'},
+ {title:'Hotel Vischio Osaka 酒店',location:'Hotel Vischio Osaka 酒店'},
+ ];assert.deepEqual(stops.map((_,i)=>shouldShowStopMap(stops,i)),[false,true,false,true,false,false,true,false,true,true]);});
 test('duplicate IDs are rejected',()=>{const t=emptyTrip();t.notes=[{id:'a',title:'one',body:'',url:''},{id:'a',title:'two',body:'',url:''}];assert.throws(()=>validateTrip(t),/重复/);});
 test('AI merge keeps existing bookings, adds document photos, and avoids duplicate stops',()=>{const image='00000000-0000-0000-0000-000000000001.png';const current=emptyTrip();current.days=[{id:'day1',date:'2026-10-15',city:'大阪',cityEn:'',theme:'',intro:'',stops:[{id:'stop1',time:'09:00',title:'大阪城',photos:[]}]}];current.bookings=[{id:'booking1',title:'酒店',date:'2026-10-15',kind:'hotel',attachment:{id:'00000000-0000-0000-0000-000000000000.pdf',name:'凭证'}}];const incoming=emptyTrip();incoming.title='大阪旅行';incoming.days=[{id:'day2',date:'2026-10-15',city:'大阪',cityEn:'',theme:'',intro:'',stops:[{id:'stop2',time:'09:00',title:'大阪城',photos:[{id:image,name:'文档图片',caption:'大阪城'}]},{id:'stop3',time:'11:00',title:'道顿堀'}]}];incoming.bookings=[{id:'booking2',title:'酒店',date:'2026-10-15',kind:'hotel'}];const result=mergeTrips(current,incoming);assert.equal(result.title,'大阪旅行');assert.equal(result.days.length,1);assert.equal(result.days[0].stops.length,2);assert.deepEqual(result.days[0].stops[0].photos.map(photo=>photo.id),[image]);assert.equal(result.bookings.length,1);assert.equal(result.bookings[0].attachment.name,'凭证');});
 test('tagged Feishu sections preserve separate named expansions and reminders',()=>{const source=['10月15日（周四）｜大阪','12:20 - 13:35 | JR大阪站（乘车）','摘要：优先选择更早抵达的车次。','提醒：','票务：HARUKA 需另购特急券。','【扩展｜参考车次】','12:14 → 13:01','12:44 → 13:31','【扩展｜交通方案】','PLAN A｜HARUKA','PLAN B｜JR关空快速','13:35 - 13:50 | 酒店','摘要：寄存行李。'].join('\n');const parsed=parseTaggedSections(source,'2026');assert.equal(parsed.length,2);assert.deepEqual(parsed[0].extensions.map(e=>e.title),['参考车次','交通方案']);const trip=emptyTrip();trip.startDate='2026-10-15';trip.days=[{id:'day1',date:'2026-10-15',city:'大阪',stops:[{id:'stop1',time:'12:20',title:'JR大阪站',kind:'transport',status:'planned',description:'',transport:'',tips:'',alternative:'',photos:[],preparations:[]},{id:'stop2',time:'13:35',title:'酒店',kind:'hotel',status:'planned',description:'',transport:'',tips:'',alternative:'',photos:[],preparations:[]}]}];const result=applyTaggedSections(trip,source);assert.deepEqual(result,{records:2,matched:2,extensions:2,recovered:0});const saved=validateTrip(trip).days[0].stops[0];assert.equal(saved.description,'优先选择更早抵达的车次。');assert.equal(saved.tips,'票务：HARUKA 需另购特急券。');assert.match(saved.extensions[0].body,/12:44/);assert.match(saved.extensions[1].body,/PLAN B/);assert.equal(saved.extensions[1].title,'交通方案');});

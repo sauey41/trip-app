@@ -8,7 +8,7 @@ import {createUpdater} from './lib/updater.mjs';
 import {createStore} from './lib/store.mjs';
 import {createAi} from './lib/ai.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
-const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/admin.js':'admin.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
+const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/admin.js':'admin.js','/map-visibility.js':'map-visibility.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
 export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch,sourceReader}={}){
  const store=createStore(dataDir),sessions=new Map(),attempts=new Map();

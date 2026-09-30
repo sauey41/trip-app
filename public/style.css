@@ -47,3 +47,12 @@ h1 em{margin-right:.16em}
 @media(max-width:680px){.stop{grid-template-columns:42px 24px minmax(0,1fr);column-gap:6px}.time{font-size:12px;padding-top:2px;letter-spacing:-.025em}.time>span{margin-top:3px}.marker{width:24px;height:24px}.marker svg{width:15px;height:15px}.stop:not(:last-child):before{left:59px;top:24px}.stop-content{padding-bottom:24px}.stop-tip{margin:11px 0}}
 .stop-title h3{font-size:clamp(18px,2.35vw,25px);line-height:1.38;text-wrap:pretty}.stop-title h3 .keep-together{white-space:nowrap}.stop-summary{margin-bottom:10px}.stop-divider{height:1px;background:linear-gradient(90deg,#cbd6cb 0%,#e2e8df 72%,transparent 100%);margin:10px 0 14px}.stop-detail{margin:12px 0 15px}.stop-detail p{margin-bottom:0!important}
 @media(max-width:680px){.stop-title h3{font-size:18px;line-height:1.4}.stop-divider{margin:9px 0 13px}.stop-detail{margin:10px 0 14px}}
+.stop-summary .route-copy{display:flex;align-items:baseline;gap:9px;font-size:14px;line-height:1.6}
+.route-copy strong{flex:none;font-size:inherit;line-height:inherit;margin:0}
+.route-value{min-width:0;font-size:inherit;line-height:inherit}
+.time{color:#a45137;font-family:Arial,"Microsoft YaHei",sans-serif;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:0;text-align:center}
+.time strong,.time>span{display:block;color:inherit;font-family:inherit;font-size:inherit;font-weight:inherit;line-height:1.2;letter-spacing:inherit}
+.time>span{margin-top:0}
+.time-end:before{content:"";display:block;width:1px;height:10px;background:currentColor;opacity:.55;margin:5px auto}
+.time-kind{margin-top:8px!important}
+@media(max-width:680px){.time{font-size:12px;letter-spacing:0}.time>span{margin-top:0}.time-end:before{height:9px;margin:4px auto}}
