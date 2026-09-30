@@ -43,3 +43,5 @@ h1 em{margin-right:.16em}
 .stop-actions .stop-action svg:last-child{margin-left:auto}
 @media(max-width:680px){.stop-actions{grid-template-columns:repeat(2,minmax(0,1fr));max-width:340px;gap:7px;margin-top:16px}.stop-actions .stop-action{min-height:42px;padding:9px 10px;font-size:12px}}
 @media(max-width:390px){.stop-actions .stop-action svg:last-child{display:none}}
+.timeline{max-width:100%}.stop{grid-template-columns:58px 30px minmax(0,1fr);column-gap:9px}.time{padding-top:3px;color:var(--green);font-size:13px;line-height:1.35;white-space:nowrap}.time strong,.time>span{font-size:inherit;color:inherit}.time>span{margin-top:4px}.marker{width:30px;height:30px}.stop:not(:last-child):before{left:82px;top:30px}.stop-content{padding-bottom:29px}.stop-tip{margin:13px 0}.stop-tip p:first-child{margin-top:0!important}
+@media(max-width:680px){.stop{grid-template-columns:42px 24px minmax(0,1fr);column-gap:6px}.time{font-size:12px;padding-top:2px;letter-spacing:-.025em}.time>span{margin-top:3px}.marker{width:24px;height:24px}.marker svg{width:15px;height:15px}.stop:not(:last-child):before{left:59px;top:24px}.stop-content{padding-bottom:24px}.stop-tip{margin:11px 0}}
