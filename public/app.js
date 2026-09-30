@@ -1,6 +1,7 @@
 import {api,requireSession,esc,labels,mapUrl,safeUrl} from './shared.js';
 import {wireAttachmentPreview} from './preview.js';
 import {shouldShowStopMap} from './map-visibility.js';
+import {pendingPreparationCount} from './preparations.js';
 const paths={calendar:'M5 3v4m14-4v4M3 10h18M5 5h14a2 2 0 0 1 2 2v13H3V7a2 2 0 0 1 2-2Zm2 9h2m4 0h2m-8 4h2m4 0h2',plane:'m22 2-7 20-4-9-9-4 20-7ZM11 13 22 2',ticket:'M3 5h18v5a2 2 0 0 0 0 4v5H3v-5a2 2 0 0 0 0-4V5Zm12 0v3m0 3v2m0 3v3',walk:'M7 5h10a4 4 0 0 1 0 8H7a4 4 0 0 0 0 8h10M7 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6',map:'m3 5 6-3 6 3 6-3v17l-6 3-6-3-6 3V5Zm6-3v17m6-14v17',hotel:'M3 21V7h18v14M7 7V3h10v4M8 11h1m6 0h1m-8 4h1m6 0h1m-6 6v-3h4v3',museum:'m2 8 10-6 10 6H2Zm3 3v8m7-8v8m7-8v8M2 22h20',arrow:'M7 17 17 7M7 7h10v10',check:'m5 12 4 4L19 6M3 3h18v18H3z'};
 const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.walk}"/></svg>`;
 const content=document.querySelector('#content'),tabs=[['itinerary','walk','行程'],['bookings','calendar','预订'],['map','map','地图'],['tickets','ticket','票券']];
@@ -13,8 +14,7 @@ const heading=(title,sub,tag='')=>`<section class="day-heading"><div class="head
 const destinationText=raw=>String(raw||'').trim().replace(/\s*[、，,＋+＆&]\s*/g,'&');
 const tripDate=(start,end)=>start&&end&&start.slice(0,4)===end.slice(0,4)?`${start.replaceAll('-','.')} — ${end.slice(5).replace('-','.')}`:[start,end].filter(Boolean).map(d=>d.replaceAll('-','.')).join(' — ');
 const destination=()=>{const raw=(trip.cityTo||trip.days[0]?.city||'目的地').trim(),places=raw.split(/\s*[、，,＋+＆&]\s*/).filter(Boolean);return places.length>1&&places.length<=4?places.map(esc).join('<em>&amp;</em>'):esc(raw);};
-const pendingCount=()=>trip.days.reduce((total,day)=>total+day.stops.reduce((count,stop)=>count+(stop.preparations||[]).filter(item=>!item.done).length,0),0);
-function renderStats(){document.querySelector('.stats').innerHTML=`<span>${icon('calendar')}${trip.days.length} 天行程</span><span>${icon('walk')}${esc(trip.travelers)}</span><span class="pending-stat">${icon('check')}${pendingCount()} 项待办</span>`;}
+function renderStats(){document.querySelector('.stats').innerHTML=`<span>${icon('calendar')}${trip.days.length} 天行程</span><span>${icon('walk')}${esc(trip.travelers)}</span><span class="pending-stat">${icon('check')}${pendingPreparationCount(trip)} 项待办</span>`;}
 function tipText(value){return String(value||'').split(/\n+/).map(line=>line.trim()).filter(Boolean).map(line=>{const match=/^([^：:]{1,12})[:：]\s*/.exec(line);return `<p>${match?`<strong>${esc(match[1])}：</strong>${esc(line.slice(match[0].length))}`:esc(line)}</p>`;}).join('');}
 const titleHtml=value=>esc(value).replace(/(商店|酒店|车站|餐厅|商场|美术馆|博物馆|咖啡馆|书店|公园|教堂|会场|机场|码头)/g,'<span class="keep-together">$1</span>');
 function stopCard(s,index,stops){
