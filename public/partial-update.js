@@ -11,6 +11,9 @@ function matchIndex(items,incoming,allowSameTime){
 }
 function keepChildState(existing,incoming){
  incoming.id=existing.id;
+ incoming.progress=existing.progress??(existing.status==='done'?'completed':'upcoming');
+ incoming.progressUpdatedAt=existing.progressUpdatedAt||'';
+ incoming.progressUpdatedBy=existing.progressUpdatedBy||'';
  const done=new Map((existing.preparations||[]).map(item=>[key(item.title),item]));
  const preparations=new Map((existing.preparations||[]).map(item=>[key(item.title),item]));
  for(const item of incoming.preparations||[])preparations.set(key(item.title),{...item,id:done.get(key(item.title))?.id||item.id,done:done.get(key(item.title))?.done||item.done});
