@@ -1,1 +1,1 @@
-{"name":"trip-app","version":"2.0.0","runtimeApiVersion":1,"private":true,"type":"module","scripts":{"start":"node launcher.mjs","test":"node --test"},"engines":{"node":">=22"},"dependencies":{"playwright-core":"1.62.1"}}
+{"name":"trip-app","version":"2.0.0","runtimeApiVersion":1,"private":true,"type":"module","scripts":{"start":"node launcher.mjs","test":"node --test"},"engines":{"node":">=22"},"dependencies":{"pdfjs-dist":"6.3.289","playwright-core":"1.62.1"}}

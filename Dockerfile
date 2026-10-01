@@ -4,7 +4,7 @@ ENV NODE_ENV=production PORT=8080 DATA_DIR=/app/data RUNTIME_DIR=/app/runtime BU
 RUN apk add --no-cache git chromium
 WORKDIR /app
 COPY --chown=node:node package.json server.mjs launcher.mjs ./
-RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund
+RUN npm install --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund
 COPY --chown=node:node public ./public
 COPY --chown=node:node lib ./lib
 COPY --chown=node:node scripts/browser-smoke.mjs ./scripts/browser-smoke.mjs

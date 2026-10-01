@@ -4,44 +4,55 @@ import {fileURLToPath} from 'node:url';
 import {resolve,join} from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {createAuth} from './lib/auth.mjs';
+import {createAccounts} from './lib/accounts.mjs';
 import {createUpdater} from './lib/updater.mjs';
 import {createStore} from './lib/store.mjs';
 import {createAi} from './lib/ai.mjs';
 import {createConversation} from './lib/conversation.mjs';
+import {createFx} from './lib/fx.mjs';
+import {createMemories} from './lib/memories.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
-const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/chat.js':'chat.js','/admin.js':'admin.js','/map-visibility.js':'map-visibility.js','/partial-update.js':'partial-update.js','/preparations.js':'preparations.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
+const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/register':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/chat.js':'chat.js','/admin.js':'admin.js','/map-visibility.js':'map-visibility.js','/partial-update.js':'partial-update.js','/preparations.js':'preparations.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
 export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch,sourceReader}={}){
- const store=createStore(dataDir),sessions=new Map(),attempts=new Map();
- const ai=createAi(dataDir,{fetchImpl,sourceReader}),conversations=createConversation(dataDir,{store,ai});
- const credentials=createAuth(dataDir);
+ const store=createStore(dataDir),sessions=new Map(),attempts=new Map(),registrations=new Map();
+ const ai=createAi(dataDir,{fetchImpl,sourceReader}),conversations=createConversation(dataDir,{store,ai}),memories=createMemories(dataDir,{store,conversations}),fx=createFx(dataDir,{fetchImpl});
+ const credentials=createAuth(dataDir),accounts=createAccounts(dataDir,credentials);
  const updater=createUpdater();
  const cookie=(token,age)=>`trip_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secureCookie?'; Secure':''}`;
  function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('trip_session='))?.slice(13);const s=sessions.get(token);if(s&&s.expires>Date.now())return {...s,token};if(token)sessions.delete(token);return null;}
  async function body(req,max=2*1024*1024){if(Number(req.headers['content-length'])>max)throw Object.assign(new Error('文件或内容超过大小限制'),{status:413});let size=0,parts=[];for await(const part of req){size+=part.length;if(size>max)throw Object.assign(new Error('文件或内容超过大小限制'),{status:413});parts.push(part);}return Buffer.concat(parts);}
  const json=(res,status,value,headers={})=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8',...headers});res.end(JSON.stringify(value));};
  return http.createServer(async(req,res)=>{
-  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Content-Security-Policy',"default-src 'self'; style-src 'self'; img-src 'self' blob:; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Content-Security-Policy',"default-src 'self'; style-src 'self'; img-src 'self' blob:; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   try{
    const path=new URL(req.url,'http://localhost').pathname;
    if(path==='/healthz'&&req.method==='GET'){res.writeHead(200,{'Content-Type':'text/plain'});return res.end('ok');}
-   const auth=session(req);
-   if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:!!auth,configured:await credentials.configured(),csrf:auth?.csrf});
+   let auth=session(req);if(auth?.userId&&!await accounts.active(auth.userId)){sessions.delete(auth.token);auth=null;}if(auth?.legacy&&await accounts.hasOwner()){sessions.delete(auth.token);auth=null;}
+   if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:!!auth,configured:await credentials.configured()||await accounts.hasOwner(),needsOwnerClaim:await credentials.configured()&&!await accounts.hasOwner(),csrf:auth?.csrf,role:auth?.role,username:auth?.username});
    if(path.startsWith('/api/')){
     if(!['GET','HEAD'].includes(req.method)){const origin=req.headers.origin;if(req.headers['sec-fetch-site']==='cross-site'||(origin&&new URL(origin).host!==req.headers.host))return json(res,403,{error:'请求来源不匹配'});}
     if(path==='/api/setup'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());if(data?.password!==data?.confirmPassword)return json(res,400,{error:'两次输入的密码不一致'});await credentials.setup(data?.password);return json(res,201,{ok:true});}
-    if(!await credentials.configured())return json(res,503,{error:'请先进入管理页面设置访问密码。'});
+    if(path==='/api/owner/claim'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());if(data?.password!==data?.confirmPassword)return json(res,400,{error:'两次输入的密码不一致'});const user=await accounts.claim(data?.username,data?.password);sessions.clear();return json(res,201,{user});}
+    if(path==='/api/register'&&req.method==='POST'){const now=Date.now(),ip=req.socket.remoteAddress,attempt=registrations.get(ip)||{count:0,until:now+15*60*1000};if(attempt.until<now){attempt.count=0;attempt.until=now+15*60*1000;}if(attempt.count>=5)return json(res,429,{error:'注册尝试过多，请稍后再试'});attempt.count++;registrations.set(ip,attempt);const data=JSON.parse((await body(req,4096)).toString());if(data?.password!==data?.confirmPassword)return json(res,400,{error:'两次输入的密码不一致'});return json(res,201,{user:await accounts.register(data?.username,data?.password),message:'注册申请已提交，请等待管理员批准。'});}
+    if(!await credentials.configured()&&!await accounts.hasOwner())return json(res,503,{error:'请先进入管理页面设置管理员账号。'});
     if(path==='/api/login'&&req.method==='POST'){
      const now=Date.now(),ip=req.socket.remoteAddress;for(const [key,value] of attempts)if(value.until<=now)attempts.delete(key);
      const a=attempts.get(ip)||{count:0,until:now+15*60*1000};if(a.count>=10)return json(res,429,{error:'尝试次数过多，请 15 分钟后重试'});
      const data=JSON.parse((await body(req,4096)).toString());a.count++;attempts.set(ip,a);const supplied=typeof data?.password==='string'?data.password:'';
-     if(!await credentials.verify(supplied))return json(res,401,{error:'密码不正确'});
+     let user;if(await accounts.hasOwner()){user=await accounts.verify(data?.username,supplied);if(!user)return json(res,401,{error:'用户名或密码不正确'});if(user.status!=='active')return json(res,403,{error:'账号正在等待管理员批准'});}else{if(!await credentials.verify(supplied))return json(res,401,{error:'密码不正确'});user={id:null,username:'管理员',role:'owner',legacy:true};}
      attempts.delete(ip);for(const [k,v] of sessions)if(v.expires<now)sessions.delete(k);if(sessions.size>=100)sessions.delete(sessions.keys().next().value);
-     const token=randomBytes(32).toString('hex'),csrf=randomBytes(24).toString('hex');sessions.set(token,{csrf,expires:now+12*3600*1000});return json(res,200,{ok:true,csrf},{'Set-Cookie':cookie(token,43200)});
+     const token=randomBytes(32).toString('hex'),csrf=randomBytes(24).toString('hex');sessions.set(token,{csrf,expires:now+12*3600*1000,userId:user.id,username:user.username,role:user.role,legacy:!!user.legacy});return json(res,200,{ok:true,csrf,username:user.username,role:user.role},{'Set-Cookie':cookie(token,43200)});
     }
     if(!auth)return json(res,401,{error:'请先登录'});
     if(!['GET','HEAD'].includes(req.method)&&req.headers['x-csrf-token']!==auth.csrf)return json(res,403,{error:'登录状态已更新，请刷新页面'});
     if(path==='/api/logout'&&req.method==='POST'){sessions.delete(auth.token);return json(res,200,{ok:true},{'Set-Cookie':cookie('',0)});}
+    if(auth.role!=='owner'){const memberMutation=req.method==='PATCH'&&(/^\/api\/trips\/[a-zA-Z0-9_-]+\/stops\/[a-zA-Z0-9_-]+\/(?:progress|preparations\/[a-zA-Z0-9_-]+)$/.test(path)||/^\/api\/trips\/[a-zA-Z0-9_-]+\/bookings\/[a-zA-Z0-9_-]+\/used$/.test(path))||req.method==='POST'&&/^\/api\/trips\/[a-zA-Z0-9_-]+\/chat(?:\/audio)?$/.test(path);if(!['GET','HEAD'].includes(req.method)&&!memberMutation||['/api/update','/api/ai/settings','/api/export','/api/users'].includes(path)||path.includes('/memories'))return json(res,403,{error:'此操作仅限管理员'});}
+    if(path==='/api/users'&&req.method==='GET')return json(res,200,{users:await accounts.list()});
+    if(path==='/api/fx'&&req.method==='GET')return json(res,200,await fx.current());
+    const userMatch=/^\/api\/users\/([a-f0-9-]{36})$/.exec(path);
+    if(userMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());if(data.action!=='approve')return json(res,400,{error:'操作不正确'});return json(res,200,{user:await accounts.approve(userMatch[1])});}
+    if(userMatch&&req.method==='DELETE'){const removed=await accounts.remove(userMatch[1]);for(const [token,s] of sessions)if(s.userId===removed.id)sessions.delete(token);return json(res,200,{user:removed});}
     if(path==='/api/update'&&req.method==='GET')return json(res,200,await updater.status());
     if(path==='/api/update/check'&&req.method==='POST')return json(res,200,await updater.check());
     if(path==='/api/update/apply'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());return json(res,202,await updater.apply(data.sha));}
@@ -58,12 +69,17 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     const progressMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/stops\/([a-zA-Z0-9_-]+)\/progress$/.exec(path);
     if(progressMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setProgress(progressMatch[1],progressMatch[2],data.progress));}
     const chatMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat$/.exec(path);
-    if(chatMatch&&req.method==='GET')return json(res,200,await conversations.history(chatMatch[1],new URL(req.url,'http://localhost').searchParams.get('before')??undefined));
-    if(chatMatch&&req.method==='POST'){const data=JSON.parse((await body(req,12000)).toString());return json(res,200,await conversations.send(chatMatch[1],data));}
+    if(chatMatch&&req.method==='GET')return json(res,200,await conversations.history(chatMatch[1],new URL(req.url,'http://localhost').searchParams.get('before')??undefined,auth.role==='owner'?'':auth.userId));
+    if(chatMatch&&req.method==='POST'){const data=JSON.parse((await body(req,12000)).toString());return json(res,200,await conversations.send(chatMatch[1],data,auth.role==='owner'?'':auth.userId));}
+    const memoriesMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/memories$/.exec(path);
+    if(memoriesMatch&&req.method==='GET')return json(res,200,await memories.get(memoriesMatch[1]));
+    if(memoriesMatch&&req.method==='PUT'){const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await memories.save(memoriesMatch[1],data.revision,data.draft));}
+    const memoriesPreview=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/memories\/preview$/.exec(path);
+    if(memoriesPreview&&req.method==='POST')return json(res,200,await memories.preview(memoriesPreview[1]));
     const voiceMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat\/audio$/.exec(path);
-    if(voiceMatch&&req.method==='POST')return json(res,201,await conversations.uploadAudio(voiceMatch[1],await body(req,7*1024*1024)));
+    if(voiceMatch&&req.method==='POST')return json(res,201,await conversations.uploadAudio(voiceMatch[1],await body(req,7*1024*1024),auth.role==='owner'?'':auth.userId));
     const voiceFileMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat\/audio\/([a-z0-9.-]+)$/.exec(path);
-    if(voiceFileMatch&&req.method==='GET'){const audio=await conversations.audio(voiceFileMatch[1],voiceFileMatch[2]);res.writeHead(200,{'Content-Type':audio.mime,'Content-Disposition':'inline'});return res.end(audio.bytes);}
+    if(voiceFileMatch&&req.method==='GET'){const audio=await conversations.audio(voiceFileMatch[1],voiceFileMatch[2],auth.role==='owner'?'':auth.userId);res.writeHead(200,{'Content-Type':audio.mime,'Content-Disposition':'inline'});return res.end(audio.bytes);}
     const bookingUsedMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/bookings\/([a-zA-Z0-9_-]+)\/used$/.exec(path);
     if(bookingUsedMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setBookingUsed(bookingUsedMatch[1],bookingUsedMatch[2],data.used));}
     if(path==='/api/trip'&&req.method==='GET')return json(res,200,await store.read());
@@ -96,6 +112,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     return json(res,404,{error:'接口不存在'});
    }
    if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);return res.end();}
+   if(path==='/vendor/pdf.mjs'||path==='/vendor/pdf.worker.mjs'){const name=path.endsWith('worker.mjs')?'pdf.worker.min.mjs':'pdf.min.mjs',bytes=await readFile(new URL('./node_modules/pdfjs-dist/build/'+name,import.meta.url));res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:bytes);}
    const file=publicFiles[path];if(!file){res.writeHead(404);return res.end('Not found');}
    const bytes=await readFile(new URL('./public/'+file,import.meta.url));res.writeHead(200,{'Content-Type':types[file.split('.').pop()]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(e){const code=e.status||(e instanceof ValidationError||e instanceof SyntaxError||e instanceof URIError?400:e.code==='ENOENT'?404:500);json(res,code,{error:code===500?'保存或读取失败，请检查数据卷权限和磁盘空间。':e.message});}

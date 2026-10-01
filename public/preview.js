@@ -1,19 +1,17 @@
 export function wireAttachmentPreview(){
  const dialog=document.createElement('dialog');dialog.className='attachment-preview';
- const header=document.createElement('div');header.className='preview-header';
- const title=document.createElement('h2');
- const close=document.createElement('button');close.type='button';close.textContent='关闭';close.addEventListener('click',()=>dialog.close());
- header.append(title,close);
- const body=document.createElement('div');body.className='preview-body';
- const download=document.createElement('a');download.className='map-link';download.textContent='下载原文件';
- dialog.append(header,body,download);document.body.append(dialog);
- dialog.addEventListener('close',()=>body.replaceChildren());
- document.addEventListener('click',event=>{
-  const button=event.target.closest('[data-preview]');if(!button)return;
-  const id=button.dataset.preview;if(!/^[a-f0-9-]{36}\.(pdf|png|jpg)$/.test(id))return;
-  title.textContent=button.dataset.name||'附件预览';download.href='/api/attachments/'+id;
-  const media=document.createElement(id.endsWith('.pdf')?'iframe':'img');media.src='/api/previews/'+id;
-  if(media.tagName==='IFRAME')media.title=title.textContent;else media.alt=title.textContent;
-  body.replaceChildren(media);dialog.showModal();
- });
+ dialog.innerHTML='<div class="preview-header"><h2></h2><div class="preview-zoom-controls"><button type="button" data-zoom="out" aria-label="缩小附件">−</button><span id="preview-scale">100%</span><button type="button" data-zoom="in" aria-label="放大附件">＋</button><button type="button" data-zoom="reset">重置</button><button type="button" data-close-preview>关闭</button></div></div><div class="preview-body"><div class="preview-size"><div class="preview-stage"></div></div></div><a class="map-link" download>下载原文件</a>';
+ document.body.append(dialog);
+ const body=dialog.querySelector('.preview-body'),size=dialog.querySelector('.preview-size'),stage=dialog.querySelector('.preview-stage'),label=dialog.querySelector('#preview-scale'),title=dialog.querySelector('h2'),download=dialog.querySelector('a');
+ let zoom=1,baseWidth=0,baseHeight=0,token=0;const pointers=new Map();
+ function setZoom(value,center){const next=Math.max(1,Math.min(4,Math.round(value*100)/100)),old=zoom;if(next===old)return;const x=center?.x??body.clientWidth/2,y=center?.y??body.clientHeight/2,contentX=(body.scrollLeft+x)/old,contentY=(body.scrollTop+y)/old;zoom=next;stage.style.transform=`scale(${zoom})`;size.style.width=`${Math.max(body.clientWidth-2,baseWidth*zoom)}px`;size.style.height=`${baseHeight*zoom}px`;body.scrollLeft=Math.max(0,contentX*zoom-x);body.scrollTop=Math.max(0,contentY*zoom-y);label.textContent=Math.round(zoom*100)+'%';}
+ function setSize(width,height){baseWidth=width;baseHeight=height;zoom=1;stage.style.width=width+'px';stage.style.height=height+'px';stage.style.transform='scale(1)';size.style.width=Math.max(body.clientWidth-2,width)+'px';size.style.height=height+'px';label.textContent='100%';body.scrollTo(0,0);}
+ async function image(id,name,current){const img=document.createElement('img');img.alt=name;img.src='/api/previews/'+id;await img.decode();if(current!==token)return;const width=Math.min(img.naturalWidth,Math.max(200,body.clientWidth-24)),height=img.naturalHeight*width/img.naturalWidth;img.style.width=width+'px';img.style.height=height+'px';stage.replaceChildren(img);setSize(width,height);}
+ async function pdf(id,current){const pdfjs=await import('/vendor/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdf.worker.mjs';const response=await fetch('/api/previews/'+id);if(!response.ok)throw new Error('附件读取失败');const documentTask=pdfjs.getDocument({data:new Uint8Array(await response.arrayBuffer())}),pdfDocument=await documentTask.promise;if(current!==token){await documentTask.destroy();return;}stage.replaceChildren();let height=0,width=0;const displayWidth=Math.max(200,Math.min(760,body.clientWidth-24));for(let index=1;index<=Math.min(pdfDocument.numPages,40);index++){if(current!==token)break;const page=await pdfDocument.getPage(index),natural=page.getViewport({scale:1}),scale=displayWidth/natural.width,render=page.getViewport({scale:scale*Math.min(devicePixelRatio||1,2)}),canvas=document.createElement('canvas');canvas.width=Math.ceil(render.width);canvas.height=Math.ceil(render.height);canvas.style.width=displayWidth+'px';canvas.style.height=Math.round(natural.height*scale)+'px';canvas.className='preview-page';stage.append(canvas);await page.render({canvasContext:canvas.getContext('2d'),viewport:render}).promise;height+=Math.round(natural.height*scale)+12;width=displayWidth;}if(current===token)setSize(width,height);await documentTask.destroy();}
+ document.addEventListener('click',async event=>{const button=event.target.closest('[data-preview]');if(!button)return;const id=button.dataset.preview;if(!/^[a-f0-9-]{36}\.(pdf|png|jpg)$/.test(id))return;const current=++token;title.textContent=button.dataset.name||'附件预览';download.href='/api/attachments/'+id;download.download=button.dataset.name||id;stage.textContent='正在打开附件…';setSize(Math.max(200,body.clientWidth-24),180);dialog.showModal();try{if(id.endsWith('.pdf'))await pdf(id,current);else await image(id,title.textContent,current);}catch(e){console.error('附件预览失败',e);if(current===token)stage.textContent='预览失败，请下载原文件查看。';}});
+ dialog.addEventListener('click',e=>{if(e.target===dialog||e.target.closest('[data-close-preview]'))dialog.close();const control=e.target.closest('[data-zoom]');if(control){if(control.dataset.zoom==='reset'){setZoom(1);body.scrollTo(0,0);}else setZoom(zoom*(control.dataset.zoom==='in'?1.25:.8));}});
+ dialog.addEventListener('close',()=>{token++;stage.replaceChildren();pointers.clear();});
+ body.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;body.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});});
+ body.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const last=pointers.get(e.pointerId),point={x:e.clientX,y:e.clientY};if(pointers.size===1){body.scrollLeft-=point.x-last.x;body.scrollTop-=point.y-last.y;}else{const others=[...pointers.entries()].find(([id])=>id!==e.pointerId)?.[1];if(others){const before=Math.hypot(last.x-others.x,last.y-others.y),after=Math.hypot(point.x-others.x,point.y-others.y);if(before>0)setZoom(zoom*after/before,{x:(point.x+others.x)/2-body.getBoundingClientRect().left,y:(point.y+others.y)/2-body.getBoundingClientRect().top});}}pointers.set(e.pointerId,point);});
+ for(const type of ['pointerup','pointercancel','lostpointercapture'])body.addEventListener(type,e=>pointers.delete(e.pointerId));
 }
