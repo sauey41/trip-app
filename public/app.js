@@ -33,7 +33,7 @@ function stopCard(s,index,stops){
    <div class="stop-body" ${folded?'hidden':''}>
    ${s.transport?`<div class="stop-summary"><p class="route-copy"><strong>路线</strong><span class="route-value">${esc(s.transport)}</span></p></div>`:''}
    ${s.transport&&(s.description||s.tips||s.cost||s.shops?.length)?'<div class="stop-divider" aria-hidden="true"></div>':''}
-   ${s.layout==='area'?shopList(s.shops):s.description?`<section class="stop-detail"><strong>摘要</strong><p>${esc(s.description)}</p></section>`:''}
+   ${s.layout==='area'?shopList(s.shops):s.description?`<section class="stop-detail"><strong>摘要：</strong><p>${esc(s.description)}</p></section>`:''}
    ${s.tips||s.cost?`<aside class="stop-tip">${tipText(s.tips)}${s.cost?`<p><strong>参考价：</strong>${esc(s.cost)}</p>`:''}</aside>`:''}
    ${preparations.length?`<details class="preparation" ${allDone?'':'open'}><summary>准备事项 · ${preparations.filter(p=>p.done).length}/${preparations.length}${allDone?' · 已完成':''}</summary><div class="preparation-items">${preparations.map(p=>`<label><input type="checkbox" data-stop="${esc(s.id)}" data-preparation="${esc(p.id)}" ${p.done?'checked':''}><span>${esc(p.title)}</span></label>`).join('')}</div></details>`:''}
    ${photos.length?`<section class="photo-reference"><strong>图片参考</strong><div class="photo-grid">${photos.map(p=>`<button type="button" class="photo-thumb" data-photo="${esc(p.id)}" data-photo-name="${esc(p.caption||p.name)}" aria-label="查看${esc(p.caption||'图片')}原图"><img src="/api/photos/${esc(p.id)}" alt="${esc(p.caption||p.name)}" loading="lazy"></button>`).join('')}</div></section>`:''}
