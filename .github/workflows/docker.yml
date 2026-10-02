@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
       - run: node --test
       - name: Build container for runtime smoke test
         run: docker build -t trip-app-test .
