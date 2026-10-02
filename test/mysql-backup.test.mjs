@@ -30,4 +30,14 @@ test('MySQL backup stores every data file but never stores its own database cred
  for(const [,path,sha,size] of entries){const reconstructed=Buffer.concat([...chunks].filter(([key])=>key.startsWith(sha+':')).sort(([a],[b])=>Number(a.split(':').at(-1))-Number(b.split(':').at(-1))).map(([,part])=>part));assert.equal(reconstructed.length,size);assert.deepEqual(reconstructed,await readFile(join(dir,path)));}
  assert.equal((await backup.execute()).unchanged,true);
  const status=await backup.status();assert.equal(status.lastSuccess.files,3);assert.equal(status.lastError,'');
+ await assert.rejects(backup.test({host:'10.0.15.60',port:3306,database:'trip_backup',username:'trip_backup',password:''}),/重新输入该数据库的密码/);
+ assert.equal((await backup.status()).settings.host,'backup-db');
+});
+
+test('NAS connection errors identify credential and permission problems without exposing passwords',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'trip-mysql-error-'));
+ t.after(()=>rm(dir,{recursive:true,force:true}));
+ const backup=createMysqlBackup(dir,{mysqlClient:{createConnection:async()=>{throw Object.assign(new Error('private-test-password'),{code:'ER_ACCESS_DENIED_ERROR'});}},intervalMs:3600000});
+ t.after(()=>backup.close());
+ await assert.rejects(backup.test({host:'10.0.15.60',database:'trip_backup',username:'trip_backup',password:'private-test-password'}),error=>error.status===502&&/账号或密码错误/.test(error.message)&&!error.message.includes('private-test-password'));
 });
