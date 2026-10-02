@@ -11,19 +11,20 @@ import {createAi} from './lib/ai.mjs';
 import {createConversation} from './lib/conversation.mjs';
 import {createFx} from './lib/fx.mjs';
 import {createMemories} from './lib/memories.mjs';
+import {createMysqlBackup} from './lib/mysql-backup.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
 const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/register':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/chat.js':'chat.js','/admin.js':'admin.js','/map-visibility.js':'map-visibility.js','/partial-update.js':'partial-update.js','/preparations.js':'preparations.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
 export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch,sourceReader}={}){
  const store=createStore(dataDir),sessions=new Map(),attempts=new Map(),registrations=new Map();
- const ai=createAi(dataDir,{fetchImpl,sourceReader}),conversations=createConversation(dataDir,{store,ai}),memories=createMemories(dataDir,{store,conversations}),fx=createFx(dataDir,{fetchImpl});
+ const ai=createAi(dataDir,{fetchImpl,sourceReader}),conversations=createConversation(dataDir,{store,ai}),memories=createMemories(dataDir,{store,conversations}),fx=createFx(dataDir,{fetchImpl}),backups=createMysqlBackup(dataDir);
  const credentials=createAuth(dataDir),accounts=createAccounts(dataDir,credentials);
  const updater=createUpdater();
  const cookie=(token,age)=>`trip_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secureCookie?'; Secure':''}`;
  function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('trip_session='))?.slice(13);const s=sessions.get(token);if(s&&s.expires>Date.now())return {...s,token};if(token)sessions.delete(token);return null;}
  async function body(req,max=2*1024*1024){if(Number(req.headers['content-length'])>max)throw Object.assign(new Error('文件或内容超过大小限制'),{status:413});let size=0,parts=[];for await(const part of req){size+=part.length;if(size>max)throw Object.assign(new Error('文件或内容超过大小限制'),{status:413});parts.push(part);}return Buffer.concat(parts);}
  const json=(res,status,value,headers={})=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8',...headers});res.end(JSON.stringify(value));};
- return http.createServer(async(req,res)=>{
+ const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Content-Security-Policy',"default-src 'self'; style-src 'self'; img-src 'self' blob:; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   try{
    const path=new URL(req.url,'http://localhost').pathname;
@@ -47,9 +48,13 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(!auth)return json(res,401,{error:'请先登录'});
     if(!['GET','HEAD'].includes(req.method)&&req.headers['x-csrf-token']!==auth.csrf)return json(res,403,{error:'登录状态已更新，请刷新页面'});
     if(path==='/api/logout'&&req.method==='POST'){sessions.delete(auth.token);return json(res,200,{ok:true},{'Set-Cookie':cookie('',0)});}
-    if(auth.role!=='owner'){const memberMutation=req.method==='PATCH'&&(/^\/api\/trips\/[a-zA-Z0-9_-]+\/stops\/[a-zA-Z0-9_-]+\/(?:progress|preparations\/[a-zA-Z0-9_-]+)$/.test(path)||/^\/api\/trips\/[a-zA-Z0-9_-]+\/bookings\/[a-zA-Z0-9_-]+\/used$/.test(path))||req.method==='POST'&&/^\/api\/trips\/[a-zA-Z0-9_-]+\/chat(?:\/audio)?$/.test(path);if(!['GET','HEAD'].includes(req.method)&&!memberMutation||['/api/update','/api/ai/settings','/api/export','/api/users'].includes(path)||path.includes('/memories'))return json(res,403,{error:'此操作仅限管理员'});}
+    if(auth.role!=='owner'){const memberMutation=req.method==='PATCH'&&(/^\/api\/trips\/[a-zA-Z0-9_-]+\/stops\/[a-zA-Z0-9_-]+\/(?:progress|preparations\/[a-zA-Z0-9_-]+)$/.test(path)||/^\/api\/trips\/[a-zA-Z0-9_-]+\/bookings\/[a-zA-Z0-9_-]+\/used$/.test(path))||req.method==='POST'&&/^\/api\/trips\/[a-zA-Z0-9_-]+\/chat(?:\/audio)?$/.test(path);if(!['GET','HEAD'].includes(req.method)&&!memberMutation||['/api/update','/api/ai/settings','/api/export','/api/users'].includes(path)||path.startsWith('/api/backup')||path.includes('/memories'))return json(res,403,{error:'此操作仅限管理员'});}
     if(path==='/api/users'&&req.method==='GET')return json(res,200,{users:await accounts.list()});
     if(path==='/api/fx'&&req.method==='GET')return json(res,200,await fx.current());
+    if(path==='/api/backup'&&req.method==='GET')return json(res,200,await backups.status());
+    if(path==='/api/backup/test'&&req.method==='POST')return json(res,200,await backups.test(JSON.parse((await body(req,24000)).toString())));
+    if(path==='/api/backup/config'&&req.method==='PUT')return json(res,200,await backups.configure(JSON.parse((await body(req,24000)).toString())));
+    if(path==='/api/backup/run'&&req.method==='POST')return json(res,202,await backups.trigger());
     const userMatch=/^\/api\/users\/([a-f0-9-]{36})$/.exec(path);
     if(userMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());if(data.action!=='approve')return json(res,400,{error:'操作不正确'});return json(res,200,{user:await accounts.approve(userMatch[1])});}
     if(userMatch&&req.method==='DELETE'){const removed=await accounts.remove(userMatch[1]);for(const [token,s] of sessions)if(s.userId===removed.id)sessions.delete(token);return json(res,200,{user:removed});}
@@ -70,7 +75,9 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(progressMatch&&req.method==='PATCH'){const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setProgress(progressMatch[1],progressMatch[2],data.progress));}
     const chatMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat$/.exec(path);
     if(chatMatch&&req.method==='GET')return json(res,200,await conversations.history(chatMatch[1],new URL(req.url,'http://localhost').searchParams.get('before')??undefined,auth.role==='owner'?'':auth.userId));
-    if(chatMatch&&req.method==='POST'){const data=JSON.parse((await body(req,12000)).toString());return json(res,200,await conversations.send(chatMatch[1],data,auth.role==='owner'?'':auth.userId));}
+    if(chatMatch&&req.method==='POST'){const data=JSON.parse((await body(req,12000)).toString()),scope=auth.role==='owner'?'':auth.userId;if(req.headers.prefer?.includes('respond-async')||new URL(req.url,'http://localhost').searchParams.get('async')==='1')return json(res,202,conversations.start(chatMatch[1],data,scope));return json(res,200,await conversations.send(chatMatch[1],data,scope));}
+    const chatJobMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat\/jobs\/([a-f0-9-]{36})$/.exec(path);
+    if(chatJobMatch&&req.method==='GET')return json(res,200,conversations.job(chatJobMatch[1],chatJobMatch[2],auth.role==='owner'?'':auth.userId));
     const memoriesMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/memories$/.exec(path);
     if(memoriesMatch&&req.method==='GET')return json(res,200,await memories.get(memoriesMatch[1]));
     if(memoriesMatch&&req.method==='PUT'){const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await memories.save(memoriesMatch[1],data.revision,data.draft));}
@@ -117,5 +124,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
    const bytes=await readFile(new URL('./public/'+file,import.meta.url));res.writeHead(200,{'Content-Type':types[file.split('.').pop()]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(e){const code=e.status||(e instanceof ValidationError||e instanceof SyntaxError||e instanceof URIError?400:e.code==='ENOENT'?404:500);json(res,code,{error:code===500?'保存或读取失败，请检查数据卷权限和磁盘空间。':e.message});}
  });
+ server.on('close',()=>backups.close());
+ return server;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){const server=createApp();server.listen(Number(process.env.PORT)||8080,'0.0.0.0',()=>{console.log('Trip app ready on port '+(process.env.PORT||8080));process.send?.({type:'ready'});});process.on('SIGTERM',()=>{server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),9000).unref();});}
