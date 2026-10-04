@@ -13,7 +13,7 @@ import {createFx} from './lib/fx.mjs';
 import {createMemories} from './lib/memories.mjs';
 import {createMysqlBackup} from './lib/mysql-backup.mjs';
 import {ValidationError,validateTrip} from './lib/model.mjs';
-const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/register':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/chat.js':'chat.js','/admin.js':'admin.js','/map-visibility.js':'map-visibility.js','/partial-update.js':'partial-update.js','/preparations.js':'preparations.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
+const publicFiles={'/':'index.html','/index.html':'index.html','/admin':'admin.html','/admin/':'admin.html','/login':'login.html','/register':'login.html','/style.css':'style.css','/admin.css':'admin.css','/app.js':'app.js','/chat.js':'chat.js','/sharing.js':'sharing.js','/admin.js':'admin.js','/map-visibility.js':'map-visibility.js','/partial-update.js':'partial-update.js','/preparations.js':'preparations.js','/merge.js':'merge.js','/shared.js':'shared.js','/preview.js':'preview.js','/login.js':'login.js','/assets/osaka.jpg':'assets/osaka.jpg','/favicon.svg':'favicon.svg'};
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',jpg:'image/jpeg',png:'image/png',pdf:'application/pdf',svg:'image/svg+xml'};
 const tripAssets=trip=>new Set([...trip.days.flatMap(day=>day.stops.flatMap(stop=>(stop.photos||[]).map(photo=>photo.id))),...trip.bookings.map(record=>record.attachment?.id),...trip.tickets.map(record=>record.attachment?.id)].filter(Boolean));
 export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureCookie=process.env.COOKIE_SECURE==='true',fetchImpl=fetch,sourceReader}={}){
@@ -51,8 +51,9 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path==='/api/logout'&&req.method==='POST'){sessions.delete(auth.token);return json(res,200,{ok:true},{'Set-Cookie':cookie('',0)});}
     const owner=auth.role==='owner';
     const ownerOnly=()=>{if(!owner)throw Object.assign(new Error('此操作仅限管理员'),{status:403});};
-    const tripAccess=async(id,write=false)=>{if(owner)return 'owner';const level=await store.permission(id,auth.userId);if(!level)throw Object.assign(new Error('这趟旅行尚未分享给你'),{status:404});if(write&&level!=='edit')throw Object.assign(new Error('这趟旅行仅允许查看'),{status:403});return level;};
-    const checkNewAssets=async(id,nextTrip)=>{if(owner)return;const previous=tripAssets((await store.read(id)).trip);for(const asset of tripAssets(nextTrip)){if(previous.has(asset))continue;let meta;try{meta=JSON.parse(await readFile(join(dataDir,'attachments',asset+'.access.json'),'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}if(meta?.userId!==auth.userId||meta?.tripId!==id)throw Object.assign(new Error('只能添加为当前共享旅行上传的附件'),{status:403});}};
+    const tripAccess=async(id,write=false)=>{const level=await store.permission(id,auth.userId,owner);if(!level)throw Object.assign(new Error('这趟旅行尚未分享给你'),{status:404});if(write&&level==='view')throw Object.assign(new Error('这趟旅行仅允许查看'),{status:403});return level;};
+    const tripOwnerOnly=async id=>{if(await tripAccess(id)!=='owner')throw Object.assign(new Error('只有旅行所有者可以管理分享或删除旅行'),{status:403});};
+    const checkNewAssets=async(id,nextTrip)=>{if(await tripAccess(id)==='owner'&&owner)return;const previous=tripAssets((await store.read(id)).trip);for(const asset of tripAssets(nextTrip)){if(previous.has(asset))continue;let meta;try{meta=JSON.parse(await readFile(join(dataDir,'attachments',asset+'.access.json'),'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}if(meta?.userId!==auth.userId||meta?.tripId!==id)throw Object.assign(new Error('只能添加为当前旅行上传的附件'),{status:403});}};
     const mediaAccess=async id=>{if(owner)return;const linked=await store.attachmentVisibleTo(auth.userId,id);if(linked)return;try{const meta=JSON.parse(await readFile(join(dataDir,'attachments',id+'.access.json'),'utf8'));if(meta.userId===auth.userId&&await store.permission(meta.tripId,auth.userId))return;}catch(e){if(e.code!=='ENOENT')throw e;}throw Object.assign(new Error('无权查看此附件'),{status:404});};
     if(path==='/api/users'&&req.method==='GET'){ownerOnly();return json(res,200,{users:await accounts.list()});}
     if(path==='/api/fx'&&req.method==='GET')return json(res,200,await fx.current());
@@ -62,22 +63,22 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path==='/api/backup/run'&&req.method==='POST'){ownerOnly();return json(res,202,await backups.trigger());}
     const userMatch=/^\/api\/users\/([a-f0-9-]{36})$/.exec(path);
     if(userMatch&&req.method==='PATCH'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());if(data.action!=='approve')return json(res,400,{error:'操作不正确'});return json(res,200,{user:await accounts.approve(userMatch[1])});}
-    if(userMatch&&req.method==='DELETE'){ownerOnly();const removed=await accounts.remove(userMatch[1]);await store.removeSharesForUser(removed.id);for(const [token,s] of sessions)if(s.userId===removed.id)sessions.delete(token);return json(res,200,{user:removed});}
+    if(userMatch&&req.method==='DELETE'){ownerOnly();if(await store.ownedTripCount(userMatch[1]))return json(res,409,{error:'该成员仍拥有旅行，请先由成员删除自己的旅行。'});const removed=await accounts.remove(userMatch[1]);await store.removeSharesForUser(removed.id);for(const [token,s] of sessions)if(s.userId===removed.id)sessions.delete(token);return json(res,200,{user:removed});}
     if(path==='/api/update'&&req.method==='GET'){ownerOnly();return json(res,200,await updater.status());}
     if(path==='/api/update/check'&&req.method==='POST'){ownerOnly();return json(res,200,await updater.check());}
     if(path==='/api/update/apply'&&req.method==='POST'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());return json(res,202,await updater.apply(data.sha));}
     if(path==='/api/update/rollback'&&req.method==='POST'){ownerOnly();return json(res,202,await updater.rollback());}
-    if(path==='/api/trips'&&req.method==='GET')return json(res,200,await store.list(owner?undefined:auth.userId));
-    if(path==='/api/trips'&&req.method==='POST'){ownerOnly();const data=JSON.parse((await body(req)).toString());return json(res,201,await store.create(data.trip));}
-    if(path==='/api/trips/active'&&req.method==='PUT'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.select(data.id));}
+    if(path==='/api/trips'&&req.method==='GET')return json(res,200,await store.list(auth.userId,owner));
+    if(path==='/api/trips'&&req.method==='POST'){const data=JSON.parse((await body(req)).toString());return json(res,201,await store.create(data.trip,auth.userId,owner));}
+    if(path==='/api/trips/active'&&req.method==='PUT'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());await tripOwnerOnly(data.id);return json(res,200,await store.select(data.id));}
     const sharesMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/shares$/.exec(path),shareUserMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/shares\/([a-f0-9-]{36})$/.exec(path);
-    if(sharesMatch&&req.method==='GET'){ownerOnly();const known=await accounts.list(),grants=await store.shares(sharesMatch[1]);return json(res,200,{eligible:known.filter(u=>u.role==='member'&&u.status==='active').map(u=>({id:u.id,username:u.username})),shares:grants.map(g=>({...g,username:known.find(u=>u.id===g.userId)?.username||'已移除成员'}))});}
-    if(shareUserMatch&&req.method==='PUT'){ownerOnly();const target=await accounts.active(shareUserMatch[2]);if(!target||target.role!=='member')return json(res,400,{error:'请选择已批准的成员账号'});const data=JSON.parse((await body(req,4096)).toString());return json(res,200,{share:await store.setShare(shareUserMatch[1],target.id,data.permission)});}
-    if(shareUserMatch&&req.method==='DELETE'){ownerOnly();return json(res,200,await store.removeShare(shareUserMatch[1],shareUserMatch[2]));}
+    if(sharesMatch&&req.method==='GET'){await tripOwnerOnly(sharesMatch[1]);const known=await accounts.list(),grants=await store.shares(sharesMatch[1]);return json(res,200,{eligible:known.filter(u=>u.id!==auth.userId&&u.status==='active').map(u=>({id:u.id,username:u.username})),shares:grants.map(g=>({...g,username:known.find(u=>u.id===g.userId)?.username||'已移除成员'}))});}
+    if(shareUserMatch&&req.method==='PUT'){await tripOwnerOnly(shareUserMatch[1]);const target=await accounts.active(shareUserMatch[2]);if(!target||target.id===auth.userId)return json(res,400,{error:'请选择其他已批准的成员账号'});const data=JSON.parse((await body(req,4096)).toString());return json(res,200,{share:await store.setShare(shareUserMatch[1],target.id,data.permission)});}
+    if(shareUserMatch&&req.method==='DELETE'){await tripOwnerOnly(shareUserMatch[1]);return json(res,200,await store.removeShare(shareUserMatch[1],shareUserMatch[2]));}
     const tripMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)$/.exec(path);
     if(tripMatch&&req.method==='GET'){const permission=await tripAccess(tripMatch[1]);return json(res,200,{...await store.read(tripMatch[1]),permission});}
     if(tripMatch&&req.method==='PUT'){await tripAccess(tripMatch[1],true);const data=JSON.parse((await body(req)).toString()),validated=validateTrip(data.trip);await checkNewAssets(tripMatch[1],validated);return json(res,200,await store.save(validated,data.revision,tripMatch[1]));}
-    if(tripMatch&&req.method==='DELETE'){ownerOnly();return json(res,200,await store.remove(tripMatch[1]));}
+    if(tripMatch&&req.method==='DELETE'){await tripOwnerOnly(tripMatch[1]);return json(res,200,await store.remove(tripMatch[1]));}
     const preparationMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/stops\/([a-zA-Z0-9_-]+)\/preparations\/([a-zA-Z0-9_-]+)$/.exec(path);
     if(preparationMatch&&req.method==='PATCH'){await tripAccess(preparationMatch[1],true);const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setPreparation(preparationMatch[1],preparationMatch[2],preparationMatch[3],data.done));}
     const progressMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/stops\/([a-zA-Z0-9_-]+)\/progress$/.exec(path);
@@ -88,10 +89,10 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     const chatJobMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat\/jobs\/([a-f0-9-]{36})$/.exec(path);
     if(chatJobMatch&&req.method==='GET'){await tripAccess(chatJobMatch[1]);return json(res,200,conversations.job(chatJobMatch[1],chatJobMatch[2],owner?'':auth.userId));}
     const memoriesMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/memories$/.exec(path);
-    if(memoriesMatch&&req.method==='GET'){ownerOnly();return json(res,200,await memories.get(memoriesMatch[1]));}
-    if(memoriesMatch&&req.method==='PUT'){ownerOnly();const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await memories.save(memoriesMatch[1],data.revision,data.draft));}
+    if(memoriesMatch&&req.method==='GET'){ownerOnly();await tripOwnerOnly(memoriesMatch[1]);return json(res,200,await memories.get(memoriesMatch[1]));}
+    if(memoriesMatch&&req.method==='PUT'){ownerOnly();await tripOwnerOnly(memoriesMatch[1]);const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await memories.save(memoriesMatch[1],data.revision,data.draft));}
     const memoriesPreview=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/memories\/preview$/.exec(path);
-    if(memoriesPreview&&req.method==='POST'){ownerOnly();return json(res,200,await memories.preview(memoriesPreview[1]));}
+    if(memoriesPreview&&req.method==='POST'){ownerOnly();await tripOwnerOnly(memoriesPreview[1]);return json(res,200,await memories.preview(memoriesPreview[1]));}
     const voiceMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat\/audio$/.exec(path);
     if(voiceMatch&&req.method==='POST'){await tripAccess(voiceMatch[1],true);return json(res,201,await conversations.uploadAudio(voiceMatch[1],await body(req,7*1024*1024),owner?'':auth.userId));}
     const voiceFileMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/chat\/audio\/([a-z0-9.-]+)$/.exec(path);
@@ -107,12 +108,12 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path==='/api/ai/source'&&req.method==='POST'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.readSource(data.url));}
     if(path==='/api/ai/organize'&&req.method==='POST'){ownerOnly();const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await ai.organize(data.source));}
     if(path==='/api/attachments'&&req.method==='POST'){
-     const targetTrip=new URL(req.url,'http://localhost').searchParams.get('trip');if(!owner){if(!targetTrip)return json(res,400,{error:'上传附件时需指定共享旅行'});await tripAccess(targetTrip,true);}
+     const targetTrip=new URL(req.url,'http://localhost').searchParams.get('trip');if(!owner||targetTrip){if(!targetTrip)return json(res,400,{error:'上传附件时需指定旅行'});await tripAccess(targetTrip,true);}
      const bytes=await body(req,12*1024*1024);
      const ext=bytes.subarray(0,5).toString()==='%PDF-'?'pdf':bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'png':bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'jpg':null;
      if(!ext)return json(res,400,{error:'仅支持 PDF、PNG 和 JPG 文件，最大 12 MB'});
      const id=randomUUID()+'.'+ext,name=decodeURIComponent(req.headers['x-file-name']||'attachment.'+ext).replace(/[\r\n\\/]/g,'_').slice(0,180);
-     await mkdir(join(dataDir,'attachments'),{recursive:true});await writeFile(join(dataDir,'attachments',id),bytes,{mode:0o600});if(!owner)await writeFile(join(dataDir,'attachments',id+'.access.json'),JSON.stringify({userId:auth.userId,tripId:targetTrip}),{mode:0o600});return json(res,201,{id,name});
+     await mkdir(join(dataDir,'attachments'),{recursive:true});await writeFile(join(dataDir,'attachments',id),bytes,{mode:0o600});if(!owner||targetTrip)await writeFile(join(dataDir,'attachments',id+'.access.json'),JSON.stringify({userId:auth.userId,tripId:targetTrip}),{mode:0o600});return json(res,201,{id,name});
     }
     if(path.startsWith('/api/attachments/')&&req.method==='GET'){
      const id=path.split('/').pop();if(!/^[a-f0-9-]{36}\.(pdf|png|jpg)$/.test(id))return json(res,404,{error:'附件不存在'});
@@ -130,7 +131,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
    }
    if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);return res.end();}
    if(path==='/vendor/pdf.mjs'||path==='/vendor/pdf.worker.mjs'){const name=path.endsWith('worker.mjs')?'pdf.worker.min.mjs':'pdf.min.mjs',bytes=await readFile(new URL('./node_modules/pdfjs-dist/build/'+name,import.meta.url));res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:bytes);}
-   const file=publicFiles[path];if(!file){res.writeHead(404);return res.end('Not found');}
+   const file=/^\/trips\/[a-zA-Z0-9_-]{1,80}$/.test(path)?'index.html':publicFiles[path];if(!file){res.writeHead(404);return res.end('Not found');}
    const bytes=await readFile(new URL('./public/'+file,import.meta.url));res.writeHead(200,{'Content-Type':types[file.split('.').pop()]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(e){const code=e.status||(e instanceof ValidationError||e instanceof SyntaxError||e instanceof URIError?400:e.code==='ENOENT'?404:500);json(res,code,{error:code===500?'保存或读取失败，请检查数据卷权限和磁盘空间。':e.message});}
  });

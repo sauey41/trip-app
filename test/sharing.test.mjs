@@ -88,3 +88,39 @@ test('trip sharing limits reading, editing, chat, and attachments to the granted
  assert.equal((await call('/api/trips/'+tripA)).status,404);
  assert.equal((await call('/api/photos/'+photoA.id)).status,404);
 });
+
+test('each approved account owns separate trips and can share one trip without exposing the others',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'trip-owners-'));
+ const server=createApp({dataDir:directory});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
+ const base='http://127.0.0.1:'+server.address().port;let cookie='',csrf='';
+ const call=(path,method='GET',data)=>fetch(base+path,{method,headers:{Cookie:cookie,'X-CSRF-Token':csrf,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
+ async function login(username){const response=await call('/api/login','POST',{username,password:'sharing-test-password'});assert.equal(response.status,200);cookie=response.headers.get('set-cookie').split(';')[0];csrf=(await response.json()).csrf;}
+ assert.equal((await call('/api/setup','POST',{password:'sharing-test-password',confirmPassword:'sharing-test-password'})).status,201);
+ const owner=(await call('/api/owner/claim','POST',{username:'owner',password:'sharing-test-password',confirmPassword:'sharing-test-password'}).then(r=>r.json())).user;
+ await login('owner');const legacyId=(await call('/api/trip').then(r=>r.json())).id;
+ const alice=(await call('/api/register','POST',{username:'alice',password:'sharing-test-password',confirmPassword:'sharing-test-password'}).then(r=>r.json())).user;
+ const bob=(await call('/api/register','POST',{username:'bob',password:'sharing-test-password',confirmPassword:'sharing-test-password'}).then(r=>r.json())).user;
+ for(const user of [alice,bob])assert.equal((await call('/api/users/'+user.id,'PATCH',{action:'approve'})).status,200);
+ await login('alice');const first=emptyTrip();first.title='Alice 的大阪';const second=emptyTrip();second.title='Alice 的京都';
+ const osaka=await call('/api/trips','POST',{trip:first}).then(r=>r.json()),kyoto=await call('/api/trips','POST',{trip:second}).then(r=>r.json());
+ assert.equal(osaka.ownerId,alice.id);assert.deepEqual((await call('/api/trips').then(r=>r.json())).trips.map(t=>t.id),[osaka.id,kyoto.id]);
+ assert.equal((await call('/api/trips/'+legacyId)).status,404);
+ assert.equal((await call('/api/trips/'+osaka.id+'/shares/'+bob.id,'PUT',{permission:'view'})).status,200);
+ await login('bob');assert.deepEqual((await call('/api/trips').then(r=>r.json())).trips.map(t=>t.id),[osaka.id]);
+ assert.equal((await call('/api/trips/'+osaka.id).then(r=>r.json())).permission,'view');
+ assert.equal((await call('/api/trips/'+kyoto.id)).status,404);
+ assert.equal((await call('/api/trips/'+osaka.id+'/shares')).status,403);
+ assert.equal((await call('/api/trips/'+osaka.id,'DELETE')).status,403);
+ await login('alice');assert.equal((await call('/api/trips/'+osaka.id+'/shares/'+bob.id,'PUT',{permission:'edit'})).status,200);
+ await login('bob');assert.equal((await call('/api/trips/'+osaka.id).then(r=>r.json())).permission,'edit');
+ assert.equal((await call('/api/trips/'+osaka.id+'/shares/'+owner.id,'PUT',{permission:'view'})).status,403);
+ const current=await call('/api/trips/'+osaka.id).then(r=>r.json());current.trip.title='Bob 帮忙编辑';assert.equal((await call('/api/trips/'+osaka.id,'PUT',{revision:current.revision,trip:current.trip})).status,200);
+ await login('owner');assert.deepEqual((await call('/api/trips').then(r=>r.json())).trips.map(t=>t.id),[legacyId]);
+ assert.equal((await call('/api/trips/'+osaka.id)).status,404);
+ assert.equal((await call('/api/users/'+alice.id,'DELETE')).status,409);
+ await login('alice');assert.equal((await call('/api/trips/'+osaka.id+'/shares/'+owner.id,'PUT',{permission:'view'})).status,200);
+ await login('owner');assert.deepEqual((await call('/api/trips').then(r=>r.json())).trips.map(t=>t.id),[legacyId,osaka.id]);
+ assert.equal((await call('/api/trips/'+osaka.id).then(r=>r.json())).permission,'view');
+ assert.equal((await call('/api/trips/'+osaka.id+'/shares')).status,403);
+});
