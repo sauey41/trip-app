@@ -1,0 +1,15 @@
+{
+  "docker-project": {
+    "projects": [
+      {
+        "name": "beiketrip",
+        "path": "project",
+        "build_params": {
+          "force_pull": true,
+          "force_recreate": true,
+          "build": false
+        }
+      }
+    ]
+  }
+}

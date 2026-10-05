@@ -25,6 +25,12 @@ docker run -d --name trip-app --restart unless-stopped \
 
 镜像支持 `linux/amd64` 和 `linux/arm64`。GitHub Actions 测试通过后构建发布。若 GHCR 包私有，请先登录 GHCR 或由所有者把包设为公开。
 
+## 群晖 NAS 套件
+
+仓库可以生成 **DSM 7.2.1+、x86_64** 的 `BeikeTrip-*.spk`。先在套件中心安装 Container Manager，再从 [GitHub Actions 的最新成功构建](https://github.com/sauey41/trip-app/actions/workflows/docker.yml)下载 `BeikeTrip-x86_64-SPK` 附件，在“套件中心 → 手动安装”选择其中的 SPK。也可在装有 Node.js 22+ 的源码目录运行 `node scripts/build-spk.mjs`，结果在 `dist/`。套件需要联网从 GHCR 拉取对应提交的镜像；安装包内不含用户数据。
+
+套件默认在 NAS 的 `18080` 端口提供 HTTP 访问，并用 Docker 具名卷 `beiketrip-data`、`beiketrip-runtime` 持久化数据和后台源码版本。群晖专用迁移和备份说明见 [synology/README.md](synology/README.md)。套件只管理旅行应用，不会自动迁移旧服务器上的 MariaDB、Cloudflare Tunnel 或 1Panel 配置。公网访问仍需 HTTPS；如只通过 HTTPS 访问，请将套件项目的 `COOKIE_SECURE` 改为 `true`。
+
 前台数据、导出及附件也需要登录。第一次初始化前请先由自己打开管理页设置密码。HTTPS 反向代理后设置 `COOKIE_SECURE=true`；本地 HTTP 保持默认 false。反向代理应保留 Host，允许至少 12 MB 请求体。远程公网部署请配合 HTTPS。
 
 ## 后台源码更新

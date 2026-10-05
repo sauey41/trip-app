@@ -1,0 +1,14 @@
+{
+  ".url": {
+    "SYNO.SDS.BeikeTrip": {
+      "type": "url",
+      "title": "贝克旅行",
+      "desc": "私人旅行手册",
+      "icon": "images/beiketrip_{0}.png",
+      "protocol": "http",
+      "port": "18080",
+      "url": "/",
+      "allUsers": true
+    }
+  }
+}

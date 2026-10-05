@@ -1,0 +1,22 @@
+services:
+  trip:
+    image: ghcr.io/sauey41/trip-app:sha-__IMAGE_SHA__
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      COOKIE_SECURE: "false"
+    ports:
+      - "18080:8080"
+    volumes:
+      - beiketrip-data:/app/data
+      - beiketrip-runtime:/app/runtime
+
+volumes:
+  beiketrip-data:
+    name: beiketrip-data
+  beiketrip-runtime:
+    name: beiketrip-runtime
