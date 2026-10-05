@@ -31,7 +31,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
    const path=new URL(req.url,'http://localhost').pathname;
    if(path==='/healthz'&&req.method==='GET'){res.writeHead(200,{'Content-Type':'text/plain'});return res.end('ok');}
    let auth=session(req);if(auth?.userId&&!await accounts.active(auth.userId)){sessions.delete(auth.token);auth=null;}if(auth?.legacy&&await accounts.hasOwner()){sessions.delete(auth.token);auth=null;}
-   if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:!!auth,configured:await credentials.configured()||await accounts.hasOwner(),needsOwnerClaim:await credentials.configured()&&!await accounts.hasOwner(),csrf:auth?.csrf,role:auth?.role,username:auth?.username});
+   if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:!!auth,configured:await credentials.configured()||await accounts.hasOwner(),needsOwnerClaim:await credentials.configured()&&!await accounts.hasOwner(),csrf:auth?.csrf,role:auth?.role,username:auth?.username,userId:auth?.userId});
    if(path.startsWith('/api/')){
     if(!['GET','HEAD'].includes(req.method)){const origin=req.headers.origin;if(req.headers['sec-fetch-site']==='cross-site'||(origin&&new URL(origin).host!==req.headers.host))return json(res,403,{error:'请求来源不匹配'});}
     if(path==='/api/setup'&&req.method==='POST'){const data=JSON.parse((await body(req,4096)).toString());if(data?.password!==data?.confirmPassword)return json(res,400,{error:'两次输入的密码不一致'});await credentials.setup(data?.password);return json(res,201,{ok:true});}

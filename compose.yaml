@@ -1,20 +1,20 @@
 services:
   trip:
-    image: ghcr.io/sauey41/trip-app:latest
-    build: .
-    ports:
-      - "8080:8080"
+    image: ${TRIP_IMAGE:-ghcr.io/sauey41/trip-app:latest}
     restart: unless-stopped
-    environment:
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-    volumes:
-      - trip-data:/app/data
-      - trip-runtime:/app/runtime
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    environment:
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    ports:
+      - 127.0.0.1:8080:8080
+    volumes:
+      - trip-data:/app/data
+      - trip-runtime:/app/runtime
+
 volumes:
   trip-data:
   trip-runtime:
