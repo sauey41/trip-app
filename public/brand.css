@@ -1,0 +1,11 @@
+/* Original outlined wordmark; its blue and proportions stay unchanged. */
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;flex:none;padding:16px;line-height:0}
+.brand-mark img{display:block;width:128px;height:auto;max-width:none}
+a.brand-mark:hover{filter:none;background:transparent}
+.login-brand{padding:18px;margin:-18px 0 14px -18px}
+.login-brand img{width:144px}
+.admin-top .brand{padding:16px;margin-left:-16px}
+.admin-top .brand img{width:128px}
+.footer-brand{display:table;margin:0 auto 12px;padding:16px}
+.footer-brand img{width:128px}
+@media(max-width:500px){.login-brand{margin-bottom:10px}}

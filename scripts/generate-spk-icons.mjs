@@ -10,6 +10,6 @@ try{
  const page=await browser.newPage({viewport:{width:256,height:256},deviceScaleFactor:1});
  for(const size of [16,24,32,48,64,72,256]){
   await page.setContent(source.replace('<svg ','<svg width="'+size+'" height="'+size+'" '));
-  await page.locator('svg').screenshot({path:fileURLToPath(new URL(`${size}.png`,directory))});
+  await page.locator('svg').first().screenshot({path:fileURLToPath(new URL(`${size}.png`,directory)),omitBackground:true});
  }
 }finally{await browser.close();}
