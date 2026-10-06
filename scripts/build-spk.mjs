@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const file=relative=>readFile(join(root,relative));
 const packageJson=JSON.parse(await file('package.json'));
-const build=process.env.SPK_BUILD||'4';
+const build=process.env.SPK_BUILD||'5';
 if(!/^\d+$/.test(build))throw new Error('SPK_BUILD must contain only digits');
 const version=`${packageJson.version}-${build}`;
 const sha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();

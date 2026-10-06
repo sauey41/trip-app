@@ -77,6 +77,13 @@ try{
  await page.goto(base+'/admin?trip=not-shared');await page.getByText('选择我的旅行',{exact:true}).waitFor();
  assert.equal(new URL(page.url()).searchParams.get('trip'),'not-shared');
  assert.equal(await page.locator('#save').isDisabled(),true);
+ await page.locator('#account-settings').click();
+ await page.locator('.profile-dialog [name="displayName"]').fill('贝克');
+ await page.locator('.profile-dialog [type="submit"]').click();
+ await page.getByText('名称已保存。',{exact:true}).waitFor();
+ assert.equal((await request.get(base+'/api/session').then(r=>r.json())).displayName,'贝克');
+ await page.locator('.profile-dialog [data-profile-close]').first().click();
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  // A second account in the same browser must not inherit AI write consent.
  const member=await request.post(base+'/api/register',{data:{username:'member',password,confirmPassword:password}}).then(r=>r.json());
  await request.patch(base+'/api/users/'+member.user.id,{headers,data:{action:'approve'}});
@@ -85,8 +92,18 @@ try{
  await page.goto(base+'/trips/'+a.id);await chat();await ready();
  assert.equal(await page.locator('#chat-allow-edits').isChecked(),false);
  assert.equal(await page.locator('#account-name').textContent(),'member');
+ await page.locator('#account-settings').click();
+ await page.locator('.profile-dialog [name="displayName"]').fill('同行小贝');
+ await page.locator('.profile-dialog [type="submit"]').click();
+ await page.getByText('名称已保存。',{exact:true}).waitFor();
+ assert.equal(await page.locator('#account-name').textContent(),'同行小贝');
+ assert.equal((await request.get(base+'/api/profile').then(r=>r.json())).user.username,'member');
+ await page.locator('.profile-dialog [data-profile-close]').first().click();
  await page.locator('#account-logout').click();await page.waitForURL(url=>url.pathname==='/login');
  assert.equal((await request.get(base+'/api/session').then(r=>r.json())).authenticated,false);
+ await page.goto(base+'/register');
+ await page.locator('[name="displayName"]').waitFor();
+ assert.equal(await page.locator('[name="username"]').getAttribute('autocomplete'),'username');
  assert.deepEqual(errors,[]);
  console.log('UI verified: delayed history/replies/voice/trip loads, per-trip drafts, microphone cleanup, consent isolation, explicit admin access, logout and mobile layout.');
 }finally{
