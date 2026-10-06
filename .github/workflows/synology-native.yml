@@ -36,10 +36,10 @@ jobs:
           trap 'sh synology/scripts/start-stop-status stop >/dev/null 2>&1 || true; rm -rf "$spk_test_dir"' EXIT
           tar -xOf dist/*.spk package.tgz | tar -xz -C "$spk_test_dir"
           export SYNOPKG_PKGDEST="$spk_test_dir" SYNOPKG_PKGVAR="$spk_test_dir/var"
-          export BEIKETRIP_NODE_BIN="$(command -v node)" BEIKETRIP_PORT=18080
+          export BEIKETRIP_NODE_BIN="$(command -v node)" BEIKETRIP_PORT=18081
           sh synology/scripts/start-stop-status start
           sh synology/scripts/start-stop-status status
-          curl --fail http://127.0.0.1:18080/healthz
+          curl --fail http://127.0.0.1:18081/healthz
           sh synology/scripts/start-stop-status stop
           test -d "$spk_test_dir/var/data"
       - name: Upload native SPK

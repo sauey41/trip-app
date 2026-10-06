@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const file=relative=>readFile(join(root,relative));
 const packageJson=JSON.parse(await file('package.json'));
-const build=process.env.SPK_BUILD||'2';
+const build=process.env.SPK_BUILD||'4';
 if(!/^\d+$/.test(build))throw new Error('SPK_BUILD must contain only digits');
 const version=`${packageJson.version}-${build}`;
 const sha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
@@ -51,7 +51,7 @@ const info=[
  'package="BeikeTrip"',`version="${version}"`,'os_min_ver="7.2-64570"','arch="x86_64"',
  'displayname="贝克旅行"','description="Native private trip itinerary and travel companion"',
  'maintainer="Beike Trip"','thirdparty="yes"','startable="yes"',
- 'install_dep_packages="Node.js_v22:Git"','adminport="18080"','adminprotocol="http"',
+ 'install_dep_packages="Node.js_v22:Git"','adminport="18081"','adminprotocol="http"',
  'dsmuidir="ui"','dsmappname="SYNO.SDS.BeikeTrip"',
  'support_url="https://github.com/sauey41/trip-app"',''
 ].join('\n');

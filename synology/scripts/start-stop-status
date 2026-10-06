@@ -6,7 +6,7 @@ pkg_var=${SYNOPKG_PKGVAR:-/var/packages/BeikeTrip/var}
 app_dir="$pkg_dest/app"
 pid_file="$pkg_var/beiketrip.pid"
 log_file="$pkg_var/beiketrip.log"
-port=${BEIKETRIP_PORT:-${SYNOPKG_PKGPORT:-18080}}
+port=${BEIKETRIP_PORT:-${SYNOPKG_PKGPORT:-18081}}
 node_bin=${BEIKETRIP_NODE_BIN:-/var/packages/Node.js_v22/target/usr/local/bin/node}
 
 is_running() {

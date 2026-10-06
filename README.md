@@ -29,7 +29,7 @@ docker run -d --name trip-app --restart unless-stopped \
 
 仓库生成 **DSM 7.2+、x86_64 的原生 SPK**。在套件中心安装群晖官方 **Node.js v22** 和 **Git Server**（供后台源码更新），再从 [原生套件 GitHub Actions 的最新成功构建](https://github.com/sauey41/trip-app/actions/workflows/synology-native.yml)下载 `BeikeTrip-x86_64-native-SPK` 附件，在“套件中心 → 手动安装”选择其中的 `*-native.spk`。也可在装有 Node.js 22+ 和依赖的源码目录运行 `node scripts/build-spk.mjs`，产物在 `dist/`。SPK 包含网站源码和运行依赖，不依赖 Docker、Container Manager、GHCR 或 npm 在 NAS 上下载依赖。
 
-套件直接在 NAS 的 `18080` 端口启动 Node.js 服务。数据和源码更新记录位于群晖持久化目录 `/var/packages/BeikeTrip/var/`。群晖专用迁移、备份及运行限制见 [synology/README.md](synology/README.md)。套件不自动迁移旧服务器上的 MariaDB、Cloudflare Tunnel 或 1Panel 配置。公网访问仍需 HTTPS。
+套件直接在 NAS 的 `18081` 端口启动 Node.js 服务。数据和源码更新记录位于群晖持久化目录 `/var/packages/BeikeTrip/var/`。群晖专用迁移、备份及运行限制见 [synology/README.md](synology/README.md)。套件不自动迁移旧服务器上的 MariaDB、Cloudflare Tunnel 或 1Panel 配置。公网访问仍需 HTTPS。
 
 前台数据、导出及附件也需要登录。第一次初始化前请先由自己打开管理页设置密码。HTTPS 反向代理后设置 `COOKIE_SECURE=true`；本地 HTTP 保持默认 false。反向代理应保留 Host，允许至少 12 MB 请求体。远程公网部署请配合 HTTPS。
 
