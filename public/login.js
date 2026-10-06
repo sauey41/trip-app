@@ -1,4 +1,6 @@
 import {api,safeLoginNext} from './shared.js';
+import {applyTripTheme} from './theme.js';
+applyTripTheme();
 const form=document.querySelector('#login'),error=document.querySelector('#error'),intro=document.querySelector('#login-intro'),heading=document.querySelector('.login-card h1');
 const next=safeLoginNext(new URLSearchParams(location.search).get('next')||'/');
 let mode=location.pathname==='/register'?'register':'login',configured=false,needsOwnerClaim=false;

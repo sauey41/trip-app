@@ -1,15 +1,15 @@
-.profile-dialog{box-sizing:border-box;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:24px;border:1px solid #cbd7cb;border-radius:16px;background:#fafaf5;color:#233e32;font-family:inherit;overflow:auto}
+.profile-dialog{box-sizing:border-box;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--dark);font-family:inherit;overflow:auto}
 .profile-dialog::backdrop{background:rgb(15 34 27 / 50%)}
 .profile-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
 .profile-heading h2{font-size:22px;line-height:1.4;margin:0}
-.profile-dialog button{font:inherit;font-size:14px;padding:10px 16px;border:1px solid #bfcfc2;border-radius:8px;background:#fff;color:#234e3d;cursor:pointer}
+.profile-dialog button{font:inherit;font-size:14px;padding:10px 16px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--green);cursor:pointer}
 .profile-heading button{padding:4px 12px;font-size:24px}
 .profile-dialog label{display:grid;gap:8px;font-size:14px;font-weight:600;margin:0}
-.profile-dialog input{box-sizing:border-box;width:100%;min-width:0;border:1px solid #cbd7cb;border-radius:8px;background:#fff;padding:12px;font:inherit;font-size:16px;color:#233e32}
-.profile-dialog input[readonly]{background:#edf1e9;color:#5e7264}
-.profile-hint{font-size:12px;line-height:1.7;color:#637769;margin:7px 0 20px}
+.profile-dialog input{box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px;font:inherit;font-size:16px;color:var(--dark)}
+.profile-dialog input[readonly]{background:var(--soft);color:var(--green)}
+.profile-hint{font-size:12px;line-height:1.7;color:var(--green);margin:7px 0 20px}
 .profile-feedback{font-size:14px;line-height:1.6;min-height:22px;overflow-wrap:anywhere;margin:8px 0}
 .profile-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
-.profile-dialog .profile-save{background:#204e40;color:white;border-color:#204e40}
+.profile-dialog .profile-save{background:var(--green);color:white;border-color:var(--green)}
 .profile-dialog button:disabled{opacity:.55;cursor:wait}
 .profile-dialog input:focus-visible,.profile-dialog button:focus-visible{outline:2px solid #c9875f;outline-offset:3px}

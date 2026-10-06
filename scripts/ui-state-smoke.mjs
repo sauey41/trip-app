@@ -73,6 +73,24 @@ try{
  await page.waitForFunction(()=>document.querySelector('.hero-title').textContent==='大阪');
  assert.equal(new URL(page.url()).pathname,'/trips/'+a.id);
  await page.unroute('**/api/trips/'+b.id);
+ // Appearance belongs to each trip and must change with the selected trip.
+ const snow=await create('北海道');
+ await page.goto(base+'/trips/'+snow.id);
+ await page.waitForFunction(()=>document.documentElement.dataset.travelTheme==='snow');
+ assert.ok((await page.locator('.footer-brand img').getAttribute('src')).includes('326b91'));
+ assert.ok((await page.locator('link[type="image/svg+xml"]').getAttribute('href')).includes('326b91'));
+ await page.goto(base+'/admin?trip='+snow.id);
+ await page.locator('#theme-mode').selectOption('custom');
+ await page.locator('#theme-hex').fill('#884965');
+ assert.equal(await page.locator('#theme-color').inputValue(),'#884965');
+ await page.locator('#save').click();
+ await page.getByText('保存成功，前台刷新后即可看到更新。',{exact:true}).waitFor();
+ await page.goto(base+'/trips/'+snow.id);
+ await page.waitForFunction(()=>document.documentElement.dataset.travelTheme==='custom');
+ assert.ok((await page.locator('.footer-brand img').getAttribute('src')).includes('884965'));
+ assert.equal(await page.locator('.footer-brand').getAttribute('href'),'/');
+ await select(a.id);
+ await page.waitForFunction(()=>document.documentElement.dataset.travelTheme==='osaka');
  // A named, inaccessible admin URL must not silently open another editable trip.
  await page.goto(base+'/admin?trip=not-shared');await page.getByText('选择我的旅行',{exact:true}).waitFor();
  assert.equal(new URL(page.url()).searchParams.get('trip'),'not-shared');

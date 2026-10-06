@@ -4,7 +4,7 @@ import {join,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 
-const spk=resolve(process.argv[2]||'dist/BeikeTrip-x86_64-2.0.0-6-DSM7.2-native.spk');
+const spk=resolve(process.argv[2]||'dist/BeikeTrip-x86_64-2.0.0-7-DSM7.2-native.spk');
 const temporary=await mkdtemp(join(tmpdir(),'beiketrip-native-smoke-'));
 try{
  const payload=execFileSync('tar',['-xOf',spk,'package.tgz'],{maxBuffer:100*1024*1024});

@@ -1,0 +1,13 @@
+:root{--surface:#fffdf9;--soft:#eaf0f5;--line-strong:#b6c9d9;--brand-color:#194a98;--hero-rgb:15 37 76;--destination-image:none}
+.hero{background:linear-gradient(110deg,rgb(var(--hero-rgb) / .94),rgb(var(--hero-rgb) / .58)),linear-gradient(0deg,var(--dark),transparent),var(--destination-image);background-position:center,center,center 52%;background-size:cover}
+html[data-travel-theme="snow"] .hero{background:radial-gradient(ellipse at 85% 0%,#cbe9fb55,transparent 60%),linear-gradient(115deg,var(--dark),var(--green))}
+.hero-title{color:#fff}
+.appearance-panel label[hidden]{display:none}
+.theme-color-inputs{display:flex;align-items:center;gap:10px}
+.theme-color-inputs input[type="color"]{width:58px;padding:5px;flex:none}
+.theme-preview{display:flex;align-items:center;gap:22px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:20px}
+.theme-preview img{display:block;width:72px;height:auto;padding:0;flex:none}
+.theme-preview strong{color:var(--green);font-size:15px}
+.theme-preview p{font-size:13px;color:var(--muted);margin:5px 0 0}
+.login-page{background:linear-gradient(120deg,rgb(var(--hero-rgb) / .9),rgb(var(--hero-rgb) / .6)),url('/assets/osaka.jpg') center/cover}
+.brand-mark img{filter:none;opacity:1}
