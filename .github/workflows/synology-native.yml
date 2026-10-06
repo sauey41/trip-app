@@ -19,9 +19,7 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: node --test
       - name: Build native SPK
-        env:
-          SPK_BUILD: ${{ github.run_number }}
-        run: node scripts/build-spk.mjs
+        run: SPK_BUILD=$((GITHUB_RUN_NUMBER + 1)) node scripts/build-spk.mjs
       - name: Validate archive and packaged app
         run: |
           tar -xOf dist/*.spk INFO | grep -Fx 'install_dep_packages="Node.js_v22:Git"'
