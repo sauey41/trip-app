@@ -1,20 +1,80 @@
 #!/bin/sh
-case "$1" in
-    start|stop|prestart|prestop|log)
-        exit 0
+set -eu
+
+pkg_dest=${SYNOPKG_PKGDEST:-/var/packages/BeikeTrip/target}
+pkg_var=${SYNOPKG_PKGVAR:-/var/packages/BeikeTrip/var}
+app_dir="$pkg_dest/app"
+pid_file="$pkg_var/beiketrip.pid"
+log_file="$pkg_var/beiketrip.log"
+port=${BEIKETRIP_PORT:-${SYNOPKG_PKGPORT:-18080}}
+node_bin=${BEIKETRIP_NODE_BIN:-/var/packages/Node.js_v22/target/usr/local/bin/node}
+
+is_running() {
+    [ -f "$pid_file" ] || return 1
+    read -r app_pid < "$pid_file" || return 1
+    case "$app_pid" in ''|*[!0-9]*) return 1;; esac
+    kill -0 "$app_pid" 2>/dev/null
+}
+
+is_healthy() {
+    if command -v curl >/dev/null 2>&1; then
+        curl --silent --fail --max-time 2 "http://127.0.0.1:$port/healthz" >/dev/null 2>&1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -T 2 -O /dev/null "http://127.0.0.1:$port/healthz" >/dev/null 2>&1
+    else
+        is_running
+    fi
+}
+
+case "${1:-}" in
+    start)
+        if is_running; then exit 0; fi
+        [ -x "$node_bin" ] || { echo "Node.js v22 executable missing: $node_bin" >&2; exit 1; }
+        umask 077
+        mkdir -p "$pkg_var/data" "$pkg_var/runtime/tmp"
+        export DATA_DIR="$pkg_var/data" RUNTIME_DIR="$pkg_var/runtime"
+        export PORT="$port" COOKIE_SECURE="${COOKIE_SECURE:-false}"
+        export BUILD_SHA="$(cat "$app_dir/build-sha")"
+        export PATH="/var/packages/Git/target/bin:$PATH"
+        if [ -f "$pkg_var/chromium-path" ]; then
+            read -r chromium_bin < "$pkg_var/chromium-path" || true
+            if [ -x "$chromium_bin" ]; then export CHROMIUM_PATH="$chromium_bin"; fi
+        fi
+        (cd "$app_dir" && exec "$node_bin" launcher.mjs) </dev/null >>"$log_file" 2>&1 &
+        echo "$!" > "$pid_file"
+        attempt=0
+        while [ "$attempt" -lt 25 ]; do
+            if is_running && is_healthy; then exit 0; fi
+            if ! is_running; then break; fi
+            attempt=$((attempt + 1))
+            sleep 1
+        done
+        echo "BeikeTrip did not start; see $log_file" >&2
+        rm -f "$pid_file"
+        exit 1
+        ;;
+    stop)
+        if is_running; then
+            kill "$app_pid"
+            attempt=0
+            while [ "$attempt" -lt 15 ] && kill -0 "$app_pid" 2>/dev/null; do
+                attempt=$((attempt + 1))
+                sleep 1
+            done
+            if kill -0 "$app_pid" 2>/dev/null; then kill -KILL "$app_pid" 2>/dev/null || true; fi
+        fi
+        rm -f "$pid_file"
         ;;
     status)
-        if command -v curl >/dev/null 2>&1; then
-            curl --silent --fail --max-time 3 http://127.0.0.1:18080/healthz >/dev/null 2>&1
-            exit $?
-        fi
-        if command -v wget >/dev/null 2>&1; then
-            wget -q -T 3 -O /dev/null http://127.0.0.1:18080/healthz >/dev/null 2>&1
-            exit $?
-        fi
-        exit 1
+        if is_running && is_healthy; then exit 0; fi
+        if [ -f "$pid_file" ]; then exit 1; fi
+        exit 3
         ;;
-    *)
-        exit 1
+    log)
+        [ -f "$log_file" ] && tail -n 100 "$log_file"
         ;;
+    prestart|prestop)
+        exit 0
+        ;;
+    *) exit 1;;
 esac

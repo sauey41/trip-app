@@ -1,11 +1,13 @@
-# 贝克旅行群晖套件
+# 贝克旅行原生群晖套件
 
-适用：x86_64 群晖、DSM 7.2.1-69057 或更新版本、Container Manager 1432 或更新版本。该 SPK 通过群晖官方 Docker Project Worker 管理容器，首次安装须能从 GHCR 拉取镜像。SPK 自身不包含旅行数据、数据库和 Cloudflare Tunnel。
+适用：DSM 7.2 或更新版本、x86_64 机型。套件依赖群晖官方 **Node.js v22** 和 **Git Server**，不使用 Docker / Container Manager。SPK 内含网站代码和 JavaScript 运行依赖，不含旅行数据、数据库或 Cloudflare Tunnel。
 
-在“套件中心 → 手动安装”选择 SPK。安装后使用 DSM 桌面的“贝克旅行”图标，或打开 `http://NAS地址:18080/`。本地 HTTP 访问默认允许登录；如将服务公开到互联网，应使用 HTTPS 反向代理或 Cloudflare Tunnel，并将项目 Compose 中的 `COOKIE_SECURE` 改为 `true`。
+在“套件中心”先安装 Node.js v22 和 Git Server，然后“手动安装” `BeikeTrip-*-DSM7.2-native.spk`。安装后从 DSM 桌面打开“贝克旅行”，或访问 `http://NAS地址:18080/`。安装、升级、启动和停止由 DSM 套件中心管理。首次打开后台 `/admin` 时按页面提示建立管理员账号；无需在套件中写密码。
 
-数据位于 Docker 具名卷 `beiketrip-data`，源码更新与回退记录位于 `beiketrip-runtime`。升级 SPK 前先备份两个卷。卸载或手动清理 Docker 资源前也应导出数据卷；不要依赖卸载操作保留数据。
+数据保存在 `/var/packages/BeikeTrip/var/data/`，源码更新与回退记录保存在 `/var/packages/BeikeTrip/var/runtime/`。这两个目录在套件升级时保留。安装包和源代码不包含这些数据。迁移或卸载前，先停止套件并完整备份 `var` 目录；尤其不要只复制旅行 JSON 而遗漏对话、图片、附件、语音、账户和密钥文件。旧服务 `/opt/trip-app/data/` 的内容应复制到新套件的 `var/data/`，并确保 `beiketrip` 套件用户可以读取和写入。复制完毕再启动新套件，检查账户、行程、分享、AI 对话和附件。旧新服务器不要同时写入独立的数据副本。
 
-从现有服务器迁移时，先停止旧应用并复制整个 `/opt/trip-app/data`。在 NAS 上恢复到 `beiketrip-data` 后再启动套件；`/opt/trip-app/runtime` 可恢复到 `beiketrip-runtime`。旧服务器的 `backup-db` 是单独的 MariaDB 容器，不随 SPK 安装；如果仍需要它的快照历史，须另行迁移数据库。数据中的数据库备份连接设置若仍指向 `backup-db`，应在后台改成新的数据库主机，并验证第一次完整备份成功。
+网站的 MySQL / MariaDB 备份功能仍可连接 NAS 或外部数据库，但数据库服务和历史快照不包含在 SPK 中。旧备份连接若填写了 Docker 内部主机名 `backup-db`，迁移后须在后台改为实际可达的 NAS 数据库地址，再测试连接和完整备份。
 
-容器运行在 NAS 的 18080 端口，若端口已占用，请在源码 `synology/compose.yaml` 中修改端口并重新构建 SPK；同时修改 `synology/ui/config` 和 `synology/scripts/start-stop-status` 的端口。先检查本地登录、分享、附件与备份，再转移公网域名和 Tunnel，避免旧新服务器同时写入独立数据副本。
+后台“系统更新”通过 Git Server 的 `git` 命令从 GitHub 拉取源码，需要 NAS 能访问 GitHub。依赖版本改变时应安装新 SPK；仅源码变更才适合后台更新。套件默认不含浏览器可执行文件；飞书公开页面自动读取若需浏览器，可在 NAS 安装兼容的 Chromium，把可执行文件的绝对路径写入 `/var/packages/BeikeTrip/var/chromium-path` 后重启套件。手动粘贴正文和文件导入不需要浏览器。
+
+默认 HTTP 端口为 18080。公网应通过 HTTPS 反向代理或 Cloudflare Tunnel 访问。原有 Tunnel 与 1Panel 不随 SPK 迁移，转移域名之前应先在 NAS 局域网测试登录与附件。若 NAS 已占用 18080 端口，应在源码中同步修改套件启动脚本、DSM 快捷方式配置和 INFO 后重新打包。

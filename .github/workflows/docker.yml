@@ -21,16 +21,6 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: node --test
-      - name: Validate Synology package archive
-        env:
-          SPK_BUILD: ${{ github.run_number }}
-        run: |
-          node scripts/build-spk.mjs
-          tar -tf dist/*.spk | grep -Fx 'conf/resource'
-          tar -tf dist/*.spk | grep -Fx 'scripts/start-stop-status'
-          tar -xOf dist/*.spk package.tgz | tar -tzf - | grep -Fx 'project/compose.yaml'
-          sh -n synology/scripts/start-stop-status
-          node -e "for (const p of ['synology/conf/resource','synology/conf/privilege','synology/ui/config']) JSON.parse(require('fs').readFileSync(p))"
       - name: Build container for runtime smoke test
         run: docker build -t trip-app-test .
       - name: Verify writable data volume with read-only container
@@ -78,15 +68,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build Synology x86_64 package
-        if: github.event_name != 'pull_request'
-        env:
-          SPK_BUILD: ${{ github.run_number }}
-        run: node scripts/build-spk.mjs
-      - name: Attach Synology package to this run
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: BeikeTrip-x86_64-SPK
-          path: dist/*.spk
-          if-no-files-found: error

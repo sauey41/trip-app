@@ -1,0 +1,53 @@
+name: Build native Synology package
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  spk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: node --test
+      - name: Build native SPK
+        env:
+          SPK_BUILD: ${{ github.run_number }}
+        run: node scripts/build-spk.mjs
+      - name: Validate archive and packaged app
+        run: |
+          tar -xOf dist/*.spk INFO | grep -Fx 'install_dep_packages="Node.js_v22:Git"'
+          tar -tf dist/*.spk | grep -Fx 'scripts/start-stop-status'
+          tar -xOf dist/*.spk package.tgz | tar -tzf - | grep -Fx 'app/server.mjs'
+          tar -xOf dist/*.spk package.tgz | tar -tzf - | grep -Fx 'app/node_modules/mysql2/package.json'
+          ! tar -tf dist/*.spk | grep -Fx 'conf/resource'
+          sh -n synology/scripts/start-stop-status
+          node -e "for (const p of ['synology/conf/privilege','synology/ui/config']) JSON.parse(require('fs').readFileSync(p))"
+          node scripts/spk-smoke.mjs dist/*.spk
+      - name: Smoke test package start and stop
+        run: |
+          spk_test_dir=$(mktemp -d)
+          trap 'sh synology/scripts/start-stop-status stop >/dev/null 2>&1 || true; rm -rf "$spk_test_dir"' EXIT
+          tar -xOf dist/*.spk package.tgz | tar -xz -C "$spk_test_dir"
+          export SYNOPKG_PKGDEST="$spk_test_dir" SYNOPKG_PKGVAR="$spk_test_dir/var"
+          export BEIKETRIP_NODE_BIN="$(command -v node)" BEIKETRIP_PORT=18080
+          sh synology/scripts/start-stop-status start
+          sh synology/scripts/start-stop-status status
+          curl --fail http://127.0.0.1:18080/healthz
+          sh synology/scripts/start-stop-status stop
+          test -d "$spk_test_dir/var/data"
+      - name: Upload native SPK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeikeTrip-x86_64-native-SPK
+          path: dist/*native.spk
+          if-no-files-found: error
