@@ -16,6 +16,6 @@ export function pruneRouteGroups(day){
 export function copyDayWithBranches(day,uid){
  const copy=structuredClone(day),ids=new Map();copy.id=uid();
  for(const stop of copy.stops){const old=stop.id;stop.id=uid();ids.set(old,stop.id);stop.progress='upcoming';stop.progressUpdatedAt='';stop.progressUpdatedBy='';for(const p of stop.preparations||[])p.id=uid();for(const e of stop.extensions||[])e.id=uid();}
- for(const group of routeGroups(copy)){group.id=uid();group.selectedOptionId='';group.choiceUpdatedAt='';group.choiceUpdatedBy='';group.choiceLog=[];for(const option of group.options){option.id=uid();option.stopIds=option.stopIds.map(id=>ids.get(id));}}
+ for(const group of routeGroups(copy)){group.id=uid();for(const p of group.preparations||[])p.id=uid();group.selectedOptionId='';group.choiceUpdatedAt='';group.choiceUpdatedBy='';group.choiceLog=[];for(const option of group.options){option.id=uid();option.stopIds=option.stopIds.map(id=>ids.get(id));}}
  return copy;
 }

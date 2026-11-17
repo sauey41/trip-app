@@ -84,6 +84,8 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(tripMatch&&req.method==='GET'){const permission=await tripAccess(tripMatch[1]);return json(res,200,{...await store.readFor(tripMatch[1],principal),permission});}
     if(tripMatch&&req.method==='PUT'){await tripAccess(tripMatch[1],true);const data=JSON.parse((await body(req)).toString()),validated=validateTrip(data.trip);await checkNewAssets(tripMatch[1],validated);return json(res,200,forActor(await store.save(validated,data.revision,tripMatch[1],principal)));}
     if(tripMatch&&req.method==='DELETE'){await tripOwnerOnly(tripMatch[1]);return json(res,200,await store.remove(tripMatch[1]));}
+    const groupPreparationMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/route-groups\/([a-zA-Z0-9_-]+)\/preparations\/([a-zA-Z0-9_-]+)$/.exec(path);
+    if(groupPreparationMatch&&req.method==='PATCH'){await tripAccess(groupPreparationMatch[1],true);const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setGroupPreparation(groupPreparationMatch[1],groupPreparationMatch[2],groupPreparationMatch[3],data.done));}
     const preparationMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/stops\/([a-zA-Z0-9_-]+)\/preparations\/([a-zA-Z0-9_-]+)$/.exec(path);
     if(preparationMatch&&req.method==='PATCH'){await tripAccess(preparationMatch[1],true);const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await store.setPreparation(preparationMatch[1],preparationMatch[2],preparationMatch[3],data.done));}
     const routeChoiceMatch=/^\/api\/trips\/([a-zA-Z0-9_-]+)\/route-groups\/([a-zA-Z0-9_-]+)$/.exec(path);

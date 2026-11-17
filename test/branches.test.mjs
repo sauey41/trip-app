@@ -13,11 +13,11 @@ import {createBranchDemoDay} from '../scripts/branch-demo.mjs';
 
 const demo=()=>validateTrip({...emptyTrip(),days:[createBranchDemoDay()]});
 test('branch schemas reject ambiguous references and only chosen stops count',()=>{
- const trip=demo(),day=trip.days[0];assert.equal(day.demo,true);assert.equal(activeStops(day).length,3);assert.equal(pendingPreparationCount(trip),1);assert.equal(timelineItems(day).filter(x=>x.group).length,2);
+ const trip=demo(),day=trip.days[0];assert.equal(day.demo,true);assert.equal(activeStops(day).length,3);assert.equal(pendingPreparationCount(trip),2);assert.equal(timelineItems(day).filter(x=>x.group).length,2);
  day.routeGroups[0].selectedOptionId='demo-plan-a';assert.equal(activeStops(day).length,5);assert.equal(pendingPreparationCount(trip),2);
  assert.ok(!activeStops(day).some(s=>s.id==='demo-sapporo-indoor'));assert.equal(activeStops(day).filter(s=>s.id==='demo-hokkaido-rejoin').length,1);
  day.routeGroups[1].selectedOptionId='demo-coffee-yes';assert.equal(pendingPreparationCount(trip),3);
- for(const mutation of [d=>d.routeGroups[0].options[0].stopIds.push('missing'),d=>d.routeGroups[0].options[1].stopIds.push('demo-otaru-canal'),d=>d.routeGroups[0].selectedOptionId='missing',d=>d.routeGroups[0].options[0].id=d.routeGroups[0].id]){const invalid=demo();mutation(invalid.days[0]);assert.throws(()=>validateTrip(invalid));}
+ for(const mutation of [d=>d.routeGroups[0].options[0].stopIds.push('missing'),d=>d.routeGroups[0].options[1].stopIds.push('demo-otaru-canal'),d=>d.routeGroups[0].selectedOptionId='missing',d=>d.routeGroups[0].options[0].id=d.routeGroups[0].id,d=>d.routeGroups[0].preparations[0].id=d.stops[0].preparations[0].id]){const invalid=demo();mutation(invalid.days[0]);assert.throws(()=>validateTrip(invalid));}
  const copy=copyDayWithBranches(day,randomUUID);assert.equal(copy.routeGroups[0].selectedOptionId,'');assert.equal(copy.routeGroups[0].choiceLog.length,0);assert.doesNotThrow(()=>validateTrip({...trip,days:[day,copy]}));
  const partial={...emptyTrip(),days:[{id:'replacement',date:'2027-01-01',city:'札幌',stops:[{id:'new',time:'10:00',title:'替换节点',kind:'walk',status:'planned'}]}]};
  const current=demo();current.days[0].date='2027-01-01';const updated=planPartialUpdate(current,partial,{date:'2027-01-01',mode:'replace'}).trip;assert.equal(updated.days[0].routeGroups.length,0);assert.doesNotThrow(()=>validateTrip(updated));
@@ -38,7 +38,14 @@ test('route selections are shared, revisioned, audited and do not reset hidden p
  const choice=()=>({revision:current.revision,optionId:'demo-plan-a'});
  assert.equal((await request(viewer,base+'/route-groups/demo-morning-choice','PATCH',choice())).status,403);
  assert.equal((await request(owner,base+'/stops/demo-otaru-canal/progress','PATCH',{progress:'completed'})).status,400);
- assert.equal((await request(owner,base+'/stops/demo-otaru-canal/preparations/demo-prep-weather','PATCH',{done:true})).status,400);
+ const decisionPath=base+'/route-groups/demo-morning-choice/preparations/demo-prep-weather';
+ assert.equal((await request(viewer,decisionPath,'PATCH',{done:true})).status,403);
+ assert.equal((await request(owner,decisionPath,'PATCH',{done:'yes'})).status,400);
+ assert.equal((await request(owner,decisionPath.replace('demo-prep-weather','missing'),'PATCH',{done:true})).status,404);
+ const checked=await request(owner,decisionPath,'PATCH',{done:true}).then(r=>r.json());assert.equal(checked.allDone,true);
+ current=await request(owner,base).then(r=>r.json());assert.equal(pendingPreparationCount(current.trip),1);
+ assert.equal(current.trip.days[0].routeGroups[0].preparations[0].done,true);
+ assert.equal((await request(owner,base+'/stops/demo-sapporo-indoor/preparations/demo-prep-power','PATCH',{done:true})).status,400);
  current=await request(owner,base+'/route-groups/demo-morning-choice','PATCH',choice()).then(r=>r.json());
  assert.equal(current.trip.days[0].routeGroups[0].choiceLog[0].by,owner.id);assert.ok(current.trip.days[0].routeGroups[0].choiceUpdatedAt);
  let seen=await request(viewer,base).then(r=>r.json());assert.equal(seen.trip.days[0].routeGroups[0].selectedOptionId,'demo-plan-a');assert.equal(seen.trip.tickets.length,0);
@@ -49,5 +56,5 @@ test('route selections are shared, revisioned, audited and do not reset hidden p
  await request(owner,'/api/ai/settings','PUT',{apiKey:'branch-test-api-key'});assert.equal((await request(owner,base+'/chat','POST',{text:'看看当前路线',allowEdits:false})).status,200);
  const context=JSON.parse(contexts.at(-1).messages[1].content.split('\n').slice(1).join('\n'));assert.ok(context.days[0].stops.some(s=>s.id==='demo-sapporo-indoor'));assert.ok(!context.days[0].stops.some(s=>s.id==='demo-otaru-canal'));
  current=await request(owner,base+'/route-groups/demo-morning-choice','PATCH',{revision:current.revision,optionId:''}).then(r=>r.json());assert.equal(activeStops(current.trip.days[0]).length,3);
- await new Promise(r=>app.close(r));await start();await login(owner);seen=await request(owner,base).then(r=>r.json());assert.equal(seen.trip.days[0].routeGroups[0].choiceLog.length,3);assert.equal(seen.trip.days[0].stops.find(s=>s.id==='demo-otaru-canal').progress,'completed');
+ await new Promise(r=>app.close(r));await start();await login(owner);seen=await request(owner,base).then(r=>r.json());assert.equal(seen.trip.days[0].routeGroups[0].preparations[0].done,true);assert.equal(seen.trip.days[0].routeGroups[0].choiceLog.length,3);assert.equal(seen.trip.days[0].stops.find(s=>s.id==='demo-otaru-canal').progress,'completed');
 });
