@@ -7,6 +7,7 @@ import {createAuth} from './lib/auth.mjs';
 import {createAccounts} from './lib/accounts.mjs';
 import {createUpdater} from './lib/updater.mjs';
 import {createStore} from './lib/store.mjs';
+import {readDocxSource} from './lib/docx-source.mjs';
 import {createAi} from './lib/ai.mjs';
 import {createConversation} from './lib/conversation.mjs';
 import {createFx} from './lib/fx.mjs';
@@ -114,6 +115,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve('data'),secureC
     if(path==='/api/export'&&req.method==='GET'){ownerOnly();const entry=await store.read();await tripAccess(entry.id);return json(res,200,visibleTrip(entry.trip,principal),{'Content-Disposition':'attachment; filename="trip-backup.json"'});}
     if(path==='/api/ai/settings'&&req.method==='GET'){ownerOnly();return json(res,200,await ai.settings());}
     if(path==='/api/ai/settings'&&req.method==='PUT'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.saveSettings(data));}
+    if(path==='/api/ai/source-file'&&req.method==='POST'){ownerOnly();return json(res,200,readDocxSource(await body(req,20*1024*1024)));}
     if(path==='/api/ai/source'&&req.method==='POST'){ownerOnly();const data=JSON.parse((await body(req,4096)).toString());return json(res,200,await ai.readSource(data.url));}
     if(path==='/api/ai/organize'&&req.method==='POST'){ownerOnly();const data=JSON.parse((await body(req,150000)).toString());return json(res,200,await ai.organize(data.source));}
     if(path==='/api/attachments'&&req.method==='POST'){

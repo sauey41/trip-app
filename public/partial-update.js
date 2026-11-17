@@ -1,4 +1,4 @@
-import {pruneRouteGroups} from './branches.js';
+import {pruneRouteGroups,mergeRouteGroups,stopScope} from './branches.js';
 const key=value=>String(value||'').trim().toLocaleLowerCase().replace(/[\s·・，,（）()]+/g,'');
 const inScope=(time,start,end)=>!start||!!time&&time>=start&&time<=end;
 const clone=value=>structuredClone(value);
@@ -61,18 +61,21 @@ export function planPartialUpdate(current,incoming,{date,start='',end='',mode='a
   const before=clone(day.stops);
   const retained=mode==='replace'?before.filter(stop=>!inScope(stop.time,start,end)):before;
   changes.removed=mode==='replace'?before.length-retained.length:0;
-  const matched=new Set();
+  const matched=new Set(),importedIds=new Map();
   for(const stop of imported){
-   const candidates=before.filter(item=>inScope(item.time,start,end)&&!matched.has(item.id));
+   const sourceDay=incoming.days.find(d=>d.stops.some(s=>s.id===stop.id)),scope=stopScope(sourceDay,stop.id);
+   const candidates=before.filter(item=>inScope(item.time,start,end)&&!matched.has(item.id)&&stopScope(day,item.id)===scope);
    const previous=matchIndex(candidates,stop,mode!=='add');
    const match=previous<0?null:candidates[previous];
    if(match)matched.add(match.id);
+   importedIds.set(stop.id,match?.id||stop.id);
    if(mode==='add'&&match)continue;
    if(match){const replacement=keepChildState(match,clone(stop));const position=retained.findIndex(item=>item.id===match.id);if(position>=0)retained[position]=mode==='update'?updateRecord(match,replacement):replacement;else retained.push(replacement);changes.updated++;if(mode==='replace')changes.removed--;}
    else{retained.push(clone(stop));changes.added++;}
   }
   day.stops=retained.sort((a,b)=>a.time&&b.time?a.time.localeCompare(b.time):a.time?-1:b.time?1:0);
   if(day.routeGroups?.length)pruneRouteGroups(day);
+  mergeRouteGroups(day,incoming.days.flatMap(d=>d.routeGroups||[]),importedIds);
   if(newDay){if(!day.intro&&newDay.intro)day.intro=newDay.intro;if(!day.theme&&newDay.theme)day.theme=newDay.theme;if(!day.cityEn&&newDay.cityEn)day.cityEn=newDay.cityEn;}
  }
  changes.bookings=mergeRecords(result.bookings,incoming.bookings,mode);
