@@ -102,6 +102,13 @@ try{
  assert.equal((await request.get(base+'/api/session').then(r=>r.json())).displayName,'贝克');
  await page.locator('.profile-dialog [data-profile-close]').first().click();
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.goto(base+'/admin?trip='+a.id);
+ await page.locator('[data-section="tickets"]').click();
+ await page.locator('[data-action="add"][data-path="tickets"]').click();
+ await page.locator('[data-path="tickets.0.title"]').fill('管理员私人机票');
+ assert.equal(await page.locator('[data-path="tickets.0.visibility"]').inputValue(),'private');
+ await page.locator('#save').click();
+ await page.getByText('保存成功，前台刷新后即可看到更新。',{exact:true}).waitFor();
  // A second account in the same browser must not inherit AI write consent.
  const member=await request.post(base+'/api/register',{data:{username:'member',password,confirmPassword:password}}).then(r=>r.json());
  await request.patch(base+'/api/users/'+member.user.id,{headers,data:{action:'approve'}});
@@ -117,6 +124,18 @@ try{
  assert.equal(await page.locator('#account-name').textContent(),'同行小贝');
  assert.equal((await request.get(base+'/api/profile').then(r=>r.json())).user.username,'member');
  await page.locator('.profile-dialog [data-profile-close]').first().click();
+ await page.locator('[data-view="tickets"]').click();
+ assert.equal(await page.getByText('管理员私人机票',{exact:true}).count(),0);
+ await page.goto(base+'/admin?trip='+a.id);
+ await page.locator('[data-section="tickets"]').click();
+ await page.locator('[data-action="add"][data-path="tickets"]').click();
+ await page.locator('[data-path="tickets.0.title"]').fill('同行者私人机票');
+ assert.equal(await page.locator('[data-path="tickets.0.visibility"]').inputValue(),'private');
+ await page.locator('#save').click();
+ await page.getByText('保存成功，前台刷新后即可看到更新。',{exact:true}).waitFor();
+ await page.goto(base+'/trips/'+a.id);
+ await page.locator('[data-view="tickets"]').click();
+ await page.getByText('同行者私人机票',{exact:true}).waitFor();
  await page.locator('#account-logout').click();await page.waitForURL(url=>url.pathname==='/login');
  assert.equal((await request.get(base+'/api/session').then(r=>r.json())).authenticated,false);
  await page.goto(base+'/register');
