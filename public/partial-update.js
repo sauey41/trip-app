@@ -1,3 +1,4 @@
+import {pruneRouteGroups} from './branches.js';
 const key=value=>String(value||'').trim().toLocaleLowerCase().replace(/[\s·・，,（）()]+/g,'');
 const inScope=(time,start,end)=>!start||!!time&&time>=start&&time<=end;
 const clone=value=>structuredClone(value);
@@ -71,6 +72,7 @@ export function planPartialUpdate(current,incoming,{date,start='',end='',mode='a
    else{retained.push(clone(stop));changes.added++;}
   }
   day.stops=retained.sort((a,b)=>a.time&&b.time?a.time.localeCompare(b.time):a.time?-1:b.time?1:0);
+  if(day.routeGroups?.length)pruneRouteGroups(day);
   if(newDay){if(!day.intro&&newDay.intro)day.intro=newDay.intro;if(!day.theme&&newDay.theme)day.theme=newDay.theme;if(!day.cityEn&&newDay.cityEn)day.cityEn=newDay.cityEn;}
  }
  changes.bookings=mergeRecords(result.bookings,incoming.bookings,mode);

@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {chromium} from 'playwright-core';
 import {createApp} from '../server.mjs';
 import {emptyTrip} from '../lib/model.mjs';
+import {createBranchDemoDay} from './branch-demo.mjs';
 
 // Delayed browser responses exercise real navigation races without calling MiMo.
 const dir=await mkdtemp(join(tmpdir(),'trip-ui-state-'));
@@ -92,6 +93,19 @@ try{
  await select(a.id);
  await page.waitForFunction(()=>document.documentElement.dataset.travelTheme==='osaka');
  // A named, inaccessible admin URL must not silently open another editable trip.
+ const branchPlan={...emptyTrip(),title:'北海道路线演示',cityTo:'北海道',days:[createBranchDemoDay()]};
+ const branchTrip=await request.post(base+'/api/trips',{headers,data:{trip:branchPlan}}).then(r=>r.json());
+ await page.goto(base+'/trips/'+branchTrip.id);
+ await page.getByText('分支行程交互演示',{exact:true}).waitFor();
+ assert.equal(await page.getByText('小樽运河散步（Plan A）',{exact:true}).isVisible(),false);
+ await page.locator('[data-route-option="demo-plan-a"]').click();
+ await page.locator('.chosen-route-title').filter({hasText:'Plan A'}).waitFor();
+ assert.ok((await page.locator('.stats').textContent()).includes('2 项待办'));
+ await page.locator('[data-branch-card="demo-morning-choice"] .other-routes>summary').click();
+ await page.locator('[data-route-option="demo-plan-b"]').click();
+ await page.locator('.chosen-route-title').filter({hasText:'Plan B'}).waitFor();
+ assert.equal(await page.getByText('小樽运河散步（Plan A）',{exact:true}).isVisible(),false);
+ assert.equal(await page.getByText('札幌市区汇合（共同主线）',{exact:true}).count(),1);
  await page.goto(base+'/admin?trip=not-shared');await page.getByText('选择我的旅行',{exact:true}).waitFor();
  assert.equal(new URL(page.url()).searchParams.get('trip'),'not-shared');
  assert.equal(await page.locator('#save').isDisabled(),true);

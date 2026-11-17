@@ -1,0 +1,53 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {createApp} from '../server.mjs';
+import {emptyTrip,validateTrip} from '../lib/model.mjs';
+import {activeStops,timelineItems,copyDayWithBranches} from '../public/branches.js';
+import {pendingPreparationCount} from '../public/preparations.js';
+import {planPartialUpdate} from '../public/partial-update.js';
+import {createBranchDemoDay} from '../scripts/branch-demo.mjs';
+
+const demo=()=>validateTrip({...emptyTrip(),days:[createBranchDemoDay()]});
+test('branch schemas reject ambiguous references and only chosen stops count',()=>{
+ const trip=demo(),day=trip.days[0];assert.equal(day.demo,true);assert.equal(activeStops(day).length,3);assert.equal(pendingPreparationCount(trip),1);assert.equal(timelineItems(day).filter(x=>x.group).length,2);
+ day.routeGroups[0].selectedOptionId='demo-plan-a';assert.equal(activeStops(day).length,5);assert.equal(pendingPreparationCount(trip),2);
+ assert.ok(!activeStops(day).some(s=>s.id==='demo-sapporo-indoor'));assert.equal(activeStops(day).filter(s=>s.id==='demo-hokkaido-rejoin').length,1);
+ day.routeGroups[1].selectedOptionId='demo-coffee-yes';assert.equal(pendingPreparationCount(trip),3);
+ for(const mutation of [d=>d.routeGroups[0].options[0].stopIds.push('missing'),d=>d.routeGroups[0].options[1].stopIds.push('demo-otaru-canal'),d=>d.routeGroups[0].selectedOptionId='missing',d=>d.routeGroups[0].options[0].id=d.routeGroups[0].id]){const invalid=demo();mutation(invalid.days[0]);assert.throws(()=>validateTrip(invalid));}
+ const copy=copyDayWithBranches(day,randomUUID);assert.equal(copy.routeGroups[0].selectedOptionId,'');assert.equal(copy.routeGroups[0].choiceLog.length,0);assert.doesNotThrow(()=>validateTrip({...trip,days:[day,copy]}));
+ const partial={...emptyTrip(),days:[{id:'replacement',date:'2027-01-01',city:'札幌',stops:[{id:'new',time:'10:00',title:'替换节点',kind:'walk',status:'planned'}]}]};
+ const current=demo();current.days[0].date='2027-01-01';const updated=planPartialUpdate(current,partial,{date:'2027-01-01',mode:'replace'}).trip;assert.equal(updated.days[0].routeGroups.length,0);assert.doesNotThrow(()=>validateTrip(updated));
+});
+
+test('route selections are shared, revisioned, audited and do not reset hidden progress',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'trip-branch-choice-'));let app;const password='branch-choice-test-password';
+ const contexts=[];const fetchImpl=async(_url,options)=>{contexts.push(JSON.parse(options.body));return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({reply:'已查看当前采用的路线。',edits:[]})}}]}));};
+ const start=async()=>{app=createApp({dataDir:directory,fetchImpl});await new Promise(r=>app.listen(0,'127.0.0.1',r));};await start();
+ t.after(async()=>{await new Promise(r=>app.close(r));await rm(directory,{recursive:true,force:true});});
+ const request=(user,path,method='GET',data)=>fetch(`http://127.0.0.1:${app.address().port}`+path,{method,headers:{'Content-Type':'application/json',Cookie:user?.cookie||'','X-CSRF-Token':user?.csrf||''},body:data===undefined?undefined:JSON.stringify(data)});
+ await request(null,'/api/setup','POST',{password,confirmPassword:password});const owner=(await request(null,'/api/owner/claim','POST',{username:'owner',password,confirmPassword:password}).then(r=>r.json())).user;
+ async function login(user){const r=await request(null,'/api/login','POST',{username:user.username,password});assert.equal(r.status,200);user.cookie=r.headers.get('set-cookie').split(';')[0];user.csrf=(await r.json()).csrf;return user;}await login(owner);
+ const viewer=(await request(null,'/api/register','POST',{username:'viewer',password,confirmPassword:password}).then(r=>r.json())).user;await request(owner,'/api/users/'+viewer.id,'PATCH',{action:'approve'});await login(viewer);
+ const trip=demo();trip.cityTo='北海道';trip.tickets=[{id:'private-ticket',title:'私人凭证',kind:'flight',status:'pending'}];
+ let current=await request(owner,'/api/trips','POST',{trip}).then(r=>r.json());const base='/api/trips/'+current.id;
+ await request(owner,base+'/shares/'+viewer.id,'PUT',{permission:'view'});
+ const choice=()=>({revision:current.revision,optionId:'demo-plan-a'});
+ assert.equal((await request(viewer,base+'/route-groups/demo-morning-choice','PATCH',choice())).status,403);
+ assert.equal((await request(owner,base+'/stops/demo-otaru-canal/progress','PATCH',{progress:'completed'})).status,400);
+ assert.equal((await request(owner,base+'/stops/demo-otaru-canal/preparations/demo-prep-weather','PATCH',{done:true})).status,400);
+ current=await request(owner,base+'/route-groups/demo-morning-choice','PATCH',choice()).then(r=>r.json());
+ assert.equal(current.trip.days[0].routeGroups[0].choiceLog[0].by,owner.id);assert.ok(current.trip.days[0].routeGroups[0].choiceUpdatedAt);
+ let seen=await request(viewer,base).then(r=>r.json());assert.equal(seen.trip.days[0].routeGroups[0].selectedOptionId,'demo-plan-a');assert.equal(seen.trip.tickets.length,0);
+ const stale=choice();await request(owner,base+'/stops/demo-otaru-canal/progress','PATCH',{progress:'completed'});
+ assert.equal((await request(owner,base+'/route-groups/demo-morning-choice','PATCH',{...stale,optionId:'demo-plan-b'})).status,409);
+ current=await request(owner,base).then(r=>r.json());current=await request(owner,base+'/route-groups/demo-morning-choice','PATCH',{revision:current.revision,optionId:'demo-plan-b'}).then(r=>r.json());
+ assert.equal(activeStops(current.trip.days[0]).some(s=>s.id==='demo-otaru-canal'),false);assert.equal(current.trip.days[0].stops.find(s=>s.id==='demo-otaru-canal').progress,'completed');
+ await request(owner,'/api/ai/settings','PUT',{apiKey:'branch-test-api-key'});assert.equal((await request(owner,base+'/chat','POST',{text:'看看当前路线',allowEdits:false})).status,200);
+ const context=JSON.parse(contexts.at(-1).messages[1].content.split('\n').slice(1).join('\n'));assert.ok(context.days[0].stops.some(s=>s.id==='demo-sapporo-indoor'));assert.ok(!context.days[0].stops.some(s=>s.id==='demo-otaru-canal'));
+ current=await request(owner,base+'/route-groups/demo-morning-choice','PATCH',{revision:current.revision,optionId:''}).then(r=>r.json());assert.equal(activeStops(current.trip.days[0]).length,3);
+ await new Promise(r=>app.close(r));await start();await login(owner);seen=await request(owner,base).then(r=>r.json());assert.equal(seen.trip.days[0].routeGroups[0].choiceLog.length,3);assert.equal(seen.trip.days[0].stops.find(s=>s.id==='demo-otaru-canal').progress,'completed');
+});

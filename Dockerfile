@@ -9,6 +9,7 @@ COPY --chown=node:node public ./public
 COPY --chown=node:node lib ./lib
 COPY --chown=node:node scripts/browser-smoke.mjs ./scripts/browser-smoke.mjs
 COPY --chown=node:node scripts/ui-state-smoke.mjs ./scripts/ui-state-smoke.mjs
+COPY --chown=node:node scripts/branch-demo.mjs ./scripts/branch-demo.mjs
 COPY --chown=node:node scripts/restore-backup.mjs ./scripts/restore-backup.mjs
 RUN mkdir -p /app/data /app/runtime && chown node:node /app/data /app/runtime
 USER node
