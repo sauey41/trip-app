@@ -100,8 +100,10 @@ try{
  assert.equal(await page.getByText('小樽运河散步（Plan A）',{exact:true}).isVisible(),false);
  await page.locator('[data-route-option="demo-plan-a"]').click();
  await page.locator('.chosen-route-title').filter({hasText:'Plan A'}).waitFor();
+ assert.equal(await page.locator('[data-route-toggle="demo-morning-choice"]').getAttribute('aria-expanded'),'false');
+ assert.equal(await page.getByText('选择记录',{exact:true}).count(),0);
  assert.ok((await page.locator('.stats').textContent()).includes('2 项待办'));
- await page.locator('[data-branch-card="demo-morning-choice"] .other-routes>summary').click();
+ await page.locator('[data-branch-card="demo-morning-choice"] [data-route-toggle]').click();
  await page.locator('[data-route-option="demo-plan-b"]').click();
  await page.locator('.chosen-route-title').filter({hasText:'Plan B'}).waitFor();
  assert.equal(await page.getByText('小樽运河散步（Plan A）',{exact:true}).isVisible(),false);
